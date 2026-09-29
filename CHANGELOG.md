@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.2.1] - 2026-09-29
+
+- Replaced the archived MinIO container with LocalStack as the S3-compatible storage (MinIO open-source was discontinued upstream).
+- Mapped the local PostgreSQL port to 5433 to avoid clashing with a system PostgreSQL service.
+
 ## [0.2.0] - 2026-09-29
 
 - Connected real MinIO/S3 storage for lot images (lazy S3-compatible client, public URLs).

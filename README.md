@@ -1,13 +1,15 @@
 # SobraCero MVP
 
-SobraCero is a food-rescue marketplace: shops publish lots close to expiry and neighbors reserve or donate them. The repository is a two-application monorepo with FastAPI, SQLAlchemy, Celery, Redis, PostgreSQL, MinIO, Next.js and Tailwind.
+SobraCero is a food-rescue marketplace: shops publish lots close to expiry and neighbors reserve or donate them. The repository is a two-application monorepo with FastAPI, SQLAlchemy, Celery, Redis, PostgreSQL, LocalStack (S3-compatible storage), Next.js and Tailwind.
 
 ## Run locally
 
 1. Copy `.env.example` to `.env` (secrets stay local, never committed).
-2. Run `docker-compose up --build`.
-3. In another terminal run `docker-compose exec backend python seed_data.py`.
+2. Run `docker compose up --build`.
+3. In another terminal run `docker compose exec backend python seed_data.py`.
 4. Open `http://localhost:3000` and API documentation at `http://localhost:8000/docs`.
+
+> Note: PostgreSQL is published on host port **5433** to avoid clashing with a local PostgreSQL service. The local S3 endpoint is `http://localhost:4566` (LocalStack).
 
 The demo account is `demo@sobracero.local` with password `password123`. Do not use it outside local development.
 
@@ -30,7 +32,7 @@ The full demo flow is wired end-to-end:
 
 1. Register/login from the UI (`/login`, `/register`) → JWT stored locally.
 2. Dashboard `/shop`: create shops and products.
-3. `/lots/new`: publish a lot (image optional, compressed on the client via canvas and stored in **MinIO/S3**).
+3. `/lots/new`: publish a lot (image optional, compressed on the client via canvas and stored in **S3-compatible storage** via LocalStack).
 4. Vitrine `/`: lots appear with price, discount and expiry; reserve directly or open `/lots/{id}`.
 5. `/lots/{id}`: reserve a quantity (atomic, reduces stock) and generate **3 promo variants**.
 6. `/admin`: platform counts and a 7-day forecast.
@@ -56,8 +58,8 @@ Any OpenAI-compatible endpoint works by setting `LLM_BASE_URL` and `LLM_MODEL`. 
 - CI runs `pytest`, `black`, `isort`, `flake8` and `mypy` for the backend and `eslint`, `prettier` and `next build` for the frontend on pushes/PRs to `develop`.
 - Rate limiting (in-memory sliding window) protects image uploads and promo generation.
 - Alembic is included for migration workflows; the MVP also creates tables on startup so a fresh Docker environment is immediately usable.
-- MinIO stores lot images and returns public URLs; set `MINIO_PUBLIC_URL` if your browser cannot reach the MinIO host used by the backend.
+- Images are stored through an S3-compatible adapter backed by **LocalStack** in Docker (MinIO was archived upstream in 2026). Set `MINIO_ENDPOINT`/`MINIO_PUBLIC_URL` to point at any S3-compatible service (MinIO, AWS S3, LocalStack...).
 
 ## Demo flow
 
-Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker with `docker-compose up worker` to process promo jobs asynchronously.
+Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker with `docker compose up worker` to process promo jobs asynchronously.

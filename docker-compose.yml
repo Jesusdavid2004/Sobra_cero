@@ -5,29 +5,29 @@ services:
       POSTGRES_USER: sobracero
       POSTGRES_PASSWORD: sobracero
       POSTGRES_DB: sobracero
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
     volumes: ["postgres_data:/var/lib/postgresql/data"]
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  localstack:
+    image: localstack/localstack:3.5.0
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports: ["9000:9000", "9001:9001"]
-    volumes: ["minio_data:/data"]
+      SERVICES: s3
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    ports: ["4566:4566"]
+    volumes: ["localstack_data:/var/lib/localstack"]
   backend:
     build: ./app-backend
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg2://sobracero:sobracero@postgres:5432/sobracero
       REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
-      MINIO_PUBLIC_URL: http://localhost:9000
+      MINIO_ENDPOINT: localstack:4566
+      MINIO_PUBLIC_URL: http://localhost:4566
     ports: ["8000:8000"]
-    depends_on: [postgres, redis, minio]
+    depends_on: [postgres, redis, localstack]
   worker:
     build: ./app-backend
     command: celery -A app.worker.celery_app worker --loglevel=info
@@ -44,4 +44,4 @@ services:
     depends_on: [backend]
 volumes:
   postgres_data:
-  minio_data:
+  localstack_data:
