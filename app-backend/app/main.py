@@ -1,6 +1,8 @@
-from datetime import datetime, timezone
+import time
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -8,12 +10,26 @@ from sqlalchemy.orm import Session
 from app.auth import create_token, current_user, hash_password, verify_password
 from app.db import Base, engine, get_db
 from app.models import Donation, Lot, Product, Promotion, Reservation, Shop, User
-from app.schemas import *
+from app.schemas import (
+    DonationCreate,
+    LotCreate,
+    LotOut,
+    ProductCreate,
+    ProductOut,
+    PromotionOut,
+    ReservationCreate,
+    ShopCreate,
+    ShopOut,
+    Token,
+    UserCreate,
+    UserOut,
+)
 from app.services import build_promotions, donate_lot, reserve_lot
+from app.storage import get_storage
 from app.worker import generate_promotions_task
 
 Base.metadata.create_all(bind=engine)
-app = FastAPI(title="SobraCero API", version="0.1.0")
+app = FastAPI(title="SobraCero API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -21,6 +37,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+
+def rate_limited(limit: int, window_seconds: int = 60):
+    """Simple in-memory sliding-window rate limiter keyed by client IP."""
+
+    def dependency(request: Request) -> None:
+        key = request.client.host if request.client else "unknown"
+        now = time.time()
+        bucket = _rate_buckets[key]
+        bucket[:] = [ts for ts in bucket if now - ts < window_seconds]
+        if len(bucket) >= limit:
+            raise HTTPException(status_code=429, detail="Too many requests")
+        bucket.append(now)
+
+    return dependency
 
 
 @app.get("/health")
@@ -80,6 +113,11 @@ def create_product(
     return product
 
 
+@app.get("/api/v1/shops/{shop_id}/products", response_model=list[ProductOut])
+def shop_products(shop_id: int, db: Session = Depends(get_db)) -> list[Product]:
+    return list(db.scalars(select(Product).where(Product.shop_id == shop_id)))
+
+
 @app.post("/api/v1/lots", response_model=LotOut, status_code=201)
 def create_lot(data: LotCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Lot:
     shop = db.get(Shop, data.shop_id)
@@ -92,19 +130,27 @@ def create_lot(data: LotCreate, db: Session = Depends(get_db), user: User = Depe
     return lot
 
 
-@app.post("/api/v1/lots/{lot_id}/image", response_model=LotOut)
-def upload_image(
+@app.post(
+    "/api/v1/lots/{lot_id}/image",
+    response_model=LotOut,
+    dependencies=[Depends(rate_limited(10, 60))],
+)
+async def upload_image(
     lot_id: int, image: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)
 ) -> Lot:
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(415, "Unsupported image type")
-    content = image.file.read(5 * 1024 * 1024 + 1)
+    content = await image.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(413, "Image is too large")
     lot = db.get(Lot, lot_id)
     if not lot or lot.shop.owner_id != user.id:
         raise HTTPException(404, "Lot not found")
-    lot.image_url = f"/uploads/{lot_id}/{image.filename}"
+    key = f"lots/{lot_id}/{image.filename or 'image.jpg'}"
+    try:
+        lot.image_url = get_storage().upload(key, content, image.content_type)
+    except Exception as exc:
+        raise HTTPException(503, "Image storage unavailable") from exc
     db.commit()
     db.refresh(lot)
     return lot
@@ -114,17 +160,38 @@ def upload_image(
 def list_lots(
     expires_in: int | None = Query(None, ge=1),
     min_discount: int | None = Query(None, ge=0, le=100),
+    lat_min: float | None = Query(None, ge=-90, le=90),
+    lat_max: float | None = Query(None, ge=-90, le=90),
+    lng_min: float | None = Query(None, ge=-180, le=180),
+    lng_max: float | None = Query(None, ge=-180, le=180),
     db: Session = Depends(get_db),
 ) -> list[Lot]:
     query = select(Lot).where(Lot.quantity > 0)
     if expires_in:
         query = query.where(
-            Lot.expires_at
-            <= datetime.now(timezone.utc).replace(microsecond=0) + __import__("datetime").timedelta(hours=expires_in)
+            Lot.expires_at <= datetime.now(timezone.utc).replace(microsecond=0) + timedelta(hours=expires_in)
         )
     if min_discount is not None:
         query = query.where(Lot.discount_percent >= min_discount)
+    if lat_min is not None or lat_max is not None or lng_min is not None or lng_max is not None:
+        query = query.join(Lot.shop)
+        if lat_min is not None:
+            query = query.where(Shop.latitude >= lat_min)
+        if lat_max is not None:
+            query = query.where(Shop.latitude <= lat_max)
+        if lng_min is not None:
+            query = query.where(Shop.longitude >= lng_min)
+        if lng_max is not None:
+            query = query.where(Shop.longitude <= lng_max)
     return list(db.scalars(query.order_by(Lot.expires_at)))
+
+
+@app.get("/api/v1/lots/{lot_id}", response_model=LotOut)
+def lot_detail(lot_id: int, db: Session = Depends(get_db)) -> Lot:
+    lot = db.get(Lot, lot_id)
+    if not lot:
+        raise HTTPException(404, "Lot not found")
+    return lot
 
 
 @app.post("/api/v1/lots/{lot_id}/reserve", status_code=201)
@@ -143,15 +210,24 @@ def donate(
     return {"id": donation.id, "status": "donated", "quantity": donation.quantity}
 
 
-@app.post("/api/v1/lots/{lot_id}/generate-promos", status_code=202)
-def generate_promos(lot_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> dict[str, str]:
+@app.post(
+    "/api/v1/lots/{lot_id}/generate-promos",
+    status_code=202,
+    dependencies=[Depends(rate_limited(5, 60))],
+)
+def generate_promos(
+    lot_id: int,
+    language: str = Query("en", pattern="^(en|es)$"),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, str]:
     lot = db.get(Lot, lot_id)
     if not lot:
         raise HTTPException(404, "Lot not found")
     try:
-        generate_promotions_task.delay(lot_id)
+        generate_promotions_task.delay(lot_id, language)
     except Exception:
-        build_promotions(db, lot)
+        build_promotions(db, lot, language)
     return {"status": "queued"}
 
 

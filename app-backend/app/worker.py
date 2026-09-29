@@ -14,6 +14,9 @@ def generate_promotions_task(lot_id: int, language: str = "en") -> int:
     db = SessionLocal()
     try:
         lot = db.get(Lot, lot_id)
-        return len(build_promotions(db, lot, language)) if lot else 0
+        if not lot:
+            return 0
+        promotions = build_promotions(db, lot, language)
+        return len(promotions)
     finally:
         db.close()

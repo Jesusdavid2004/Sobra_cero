@@ -4,18 +4,18 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.llm import build_client
 from app.models import Donation, Lot, Promotion, Reservation
+from app.prompts import VARIANTS, build_prompt
 
 
 def reserve_lot(db: Session, lot_id: int, user_id: int, quantity: int) -> Reservation:
     """Reserve stock atomically; callers commit the surrounding transaction."""
     lot = db.execute(select(Lot).where(Lot.id == lot_id).with_for_update()).scalar_one_or_none()
-    expires_at = (
-        lot.expires_at.replace(tzinfo=timezone.utc)
-        if lot and lot.expires_at.tzinfo is None
-        else lot.expires_at if lot else None
-    )
-    if not lot or expires_at <= datetime.now(timezone.utc):
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot is unavailable")
+    expires_at = lot.expires_at.replace(tzinfo=timezone.utc) if lot.expires_at.tzinfo is None else lot.expires_at
+    if expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=404, detail="Lot is unavailable")
     if lot.quantity < quantity:
         raise HTTPException(status_code=409, detail="Not enough quantity available")
@@ -40,24 +40,19 @@ def donate_lot(db: Session, lot_id: int, quantity: int) -> Donation:
 
 
 def build_promotions(db: Session, lot: Lot, language: str = "en") -> list[Promotion]:
-    """Create auditable deterministic promo variants for the MVP/mock provider."""
-    prompt = f"Create three short promotional texts for {lot.title}, discount {lot.discount_percent}%."
-    templates = {
-        "en": [
-            f"Save {lot.discount_percent}% on {lot.title} before it expires!",
-            f"Good food, less waste: {lot.title} at a special price.",
-            f"Last chance for {lot.title}. Reserve yours today!",
-        ],
-        "es": [
-            f"Ahorra un {lot.discount_percent}% en {lot.title} antes de que caduque.",
-            f"Buena comida, menos desperdicio: {lot.title} a precio especial.",
-            f"Ultima oportunidad para {lot.title}. Reservalo hoy.",
-        ],
-    }
-    items = [
-        Promotion(lot_id=lot.id, language=language, variant=f"variant-{index + 1}", text=text, prompt=prompt)
-        for index, text in enumerate(templates.get(language, templates["en"]))
-    ]
-    db.add_all(items)
+    """Generate three auditable promotional variants for a lot via the LLM client."""
+    if not lot:
+        raise HTTPException(status_code=404, detail="Lot not found")
+    client = build_client()
+    promotions = []
+    for variant in VARIANTS:
+        prompt = build_prompt(lot, language, variant)
+        text = client.complete(prompt)
+        promotions.append(
+            Promotion(lot_id=lot.id, language=language, variant=f"variant-{variant}", text=text, prompt=prompt)
+        )
+    db.add_all(promotions)
     db.commit()
-    return items
+    for promotion in promotions:
+        db.refresh(promotion)
+    return promotions
