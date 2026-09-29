@@ -4,7 +4,7 @@ SobraCero is a food-rescue marketplace: shops publish lots close to expiry and n
 
 ## Run locally
 
-1. Copy `.env.example` to `.env`.
+1. Copy `.env.example` to `.env` (secrets stay local, never committed).
 2. Run `docker-compose up --build`.
 3. In another terminal run `docker-compose exec backend python seed_data.py`.
 4. Open `http://localhost:3000` and API documentation at `http://localhost:8000/docs`.
@@ -16,18 +16,48 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 ## MVP endpoints
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
-- `GET/POST /api/v1/shops`, `POST /api/v1/shops/{id}/products`
-- `GET/POST /api/v1/lots`, `POST /api/v1/lots/{id}/image`
+- `GET/POST /api/v1/shops`, `GET/POST /api/v1/shops/{id}/products`
+- `GET/POST /api/v1/lots`, `GET /api/v1/lots/{id}`, `POST /api/v1/lots/{id}/image`
 - `POST /api/v1/lots/{id}/reserve`, `POST /api/v1/lots/{id}/donate`
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
 
-Promo generation uses Celery when Redis is available and a deterministic local fallback otherwise. The generated prompt is persisted for auditability. The OpenAI key is intentionally optional and never committed.
+The public listing supports `expires_in`, `min_discount` and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
+
+## Connected flow (v0.2.0)
+
+The full demo flow is wired end-to-end:
+
+1. Register/login from the UI (`/login`, `/register`) → JWT stored locally.
+2. Dashboard `/shop`: create shops and products.
+3. `/lots/new`: publish a lot (image optional, compressed on the client via canvas and stored in **MinIO/S3**).
+4. Vitrine `/`: lots appear with price, discount and expiry; reserve directly or open `/lots/{id}`.
+5. `/lots/{id}`: reserve a quantity (atomic, reduces stock) and generate **3 promo variants**.
+6. `/admin`: platform counts and a 7-day forecast.
+
+Promo generation runs as a **Celery/Redis** job when available and falls back to an in-process run otherwise. The exact prompt used per variant is persisted for auditability.
+
+## LLM provider (free options)
+
+The promo generator uses an abstract client (`app/llm.py`) selected by `LLM_PROVIDER`:
+
+| Provider | Setup | Cost |
+|---|---|---|
+| `mock` (default) | Nothing — deterministic texts | $0 |
+| `ollama` | `LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=llama3.1` (install Ollama) | $0, local |
+| `groq` | Free account → API key, `LLM_BASE_URL=https://api.groq.com/openai/v1` | $0 |
+| `openrouter` | Free account → use `:free` models | $0 |
+| `openai` | API key from platform.openai.com (paid) | paid |
+
+Any OpenAI-compatible endpoint works by setting `LLM_BASE_URL` and `LLM_MODEL`. No key is required for `mock` or `ollama`.
 
 ## Quality and scope notes
 
-CI runs backend tests/format checks and frontend build on pushes and pull requests to `develop`. Alembic is included for migration workflows; the MVP also creates tables on startup so a fresh Docker environment is immediately usable. MinIO upload wiring is represented by validated upload metadata in this first release; replacing the local URL assignment with the S3 adapter is the next production-hardening step.
+- CI runs `pytest`, `black`, `isort`, `flake8` and `mypy` for the backend and `eslint`, `prettier` and `next build` for the frontend on pushes/PRs to `develop`.
+- Rate limiting (in-memory sliding window) protects image uploads and promo generation.
+- Alembic is included for migration workflows; the MVP also creates tables on startup so a fresh Docker environment is immediately usable.
+- MinIO stores lot images and returns public URLs; set `MINIO_PUBLIC_URL` if your browser cannot reach the MinIO host used by the backend.
 
 ## Demo flow
 
-Register a user through Swagger, create a shop and product, create a lot expiring within 48 hours, open the vitrine, reserve a quantity, and call `generate-promos`. Start the Celery worker with `docker-compose up worker` to process the asynchronous job.
+Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker with `docker-compose up worker` to process promo jobs asynchronously.
