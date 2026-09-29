@@ -4,7 +4,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check app i18n public *.json *.mjs *.ts"
   },
   "dependencies": {
     "next": "15.1.3",
