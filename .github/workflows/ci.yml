@@ -16,6 +16,8 @@ jobs:
         env: { PYTHONPATH: app-backend }
       - run: black --check app-backend/app app-backend/tests
       - run: isort --check-only app-backend/app app-backend/tests
+      - run: flake8 app-backend/app app-backend/tests
+      - run: mypy app-backend/app
   frontend:
     runs-on: ubuntu-latest
     steps:
