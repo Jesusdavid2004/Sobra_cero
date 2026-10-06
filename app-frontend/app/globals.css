@@ -1,14 +1,22 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
 :root {
   color-scheme: light;
+  font-family: Arial, Helvetica, sans-serif;
 }
+
+html {
+  background: #f5f3ee;
+}
+
 body {
-  @apply bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100;
+  @apply m-0 bg-stone-50 text-stone-900 antialiased;
 }
+
 button,
 a,
 input {
-  @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500;
+  @apply focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5a803f];
 }

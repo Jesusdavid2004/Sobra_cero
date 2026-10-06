@@ -1,5 +1,5 @@
-const CACHE = "sobracero-v1";
-const SHELL = ["/", "/manifest.webmanifest"];
+const CACHE = "sobracero-v2";
+const SHELL = ["/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
@@ -19,19 +19,10 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  if (request.method !== "GET" || !request.url.startsWith("http")) return;
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
-  );
+  if (request.method !== "GET" || new URL(request.url).origin !== self.location.origin) return;
+  if (request.mode === "navigate" || new URL(request.url).pathname.startsWith("/_next/")) return;
+
+  if (new URL(request.url).pathname !== "/manifest.webmanifest") return;
+
+  event.respondWith(caches.match(request).then((cached) => cached ?? fetch(request)));
 });
