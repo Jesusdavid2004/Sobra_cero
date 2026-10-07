@@ -11,7 +11,7 @@ SobraCero is a food-rescue marketplace: shops publish lots close to expiry and n
 
 > Note: PostgreSQL is published on host port **5433** to avoid clashing with a local PostgreSQL service. The local S3 endpoint is `http://localhost:4566` (LocalStack).
 
-The demo account is `demo@sobracero.local` with password `password123`. Do not use it outside local development.
+The demo account is `demo@sobracero.com` with password `password123`. Do not use it outside local development. Running the seed command again updates the legacy `.local` demo account and does not duplicate its demo shop, product, or lots.
 
 For a no-Docker backend test run, create a Python 3.12 virtual environment, install `app-backend/requirements.txt`, set `PYTHONPATH=app-backend`, and run `pytest app-backend/tests`. To verify the required application/domain coverage locally, run `pytest --cov=app.domain --cov=app.application --cov-fail-under=70 app-backend/tests` from `app-backend` with `PYTHONPATH=.`.
 
