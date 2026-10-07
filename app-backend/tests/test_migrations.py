@@ -109,6 +109,10 @@ def test_upgrade_adds_new_fields_and_backfills_existing_pickup_codes(tmp_path: P
     command.upgrade(config, "head")
 
     inspector = inspect(engine)
+    version_column = next(
+        column for column in inspector.get_columns("alembic_version") if column["name"] == "version_num"
+    )
+    assert version_column["type"].length >= 64
     assert "role" in {column["name"] for column in inspector.get_columns("users")}
     assert "business_type" in {column["name"] for column in inspector.get_columns("shops")}
     assert "category" in {column["name"] for column in inspector.get_columns("products")}

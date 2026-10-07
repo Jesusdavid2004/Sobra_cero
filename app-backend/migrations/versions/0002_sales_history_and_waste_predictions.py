@@ -10,6 +10,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    String,
     Text,
     UniqueConstraint,
     inspect,
@@ -22,6 +23,14 @@ depends_on = None
 
 
 def upgrade():
+    with op.batch_alter_table("alembic_version") as batch_op:
+        batch_op.alter_column(
+            "version_num",
+            existing_type=String(32),
+            type_=String(64),
+            existing_nullable=False,
+        )
+
     existing_tables = set(inspect(op.get_bind()).get_table_names())
     if "sales_history" not in existing_tables:
         op.create_table(
