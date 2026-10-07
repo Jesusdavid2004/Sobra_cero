@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     jwt_secret: str = "development-secret"
     access_token_expire_minutes: int = 60
+    cors_origins: str = "http://localhost:3000"
 
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"

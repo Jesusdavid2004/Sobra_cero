@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
 from app.auth import create_token, current_user, hash_password, verify_password
+from app.config import settings
 from app.db import Base, engine, get_db
 from app.dependencies import build_calculate_waste_risk_use_case
 from app.domain.exceptions import (
@@ -62,7 +63,7 @@ command.upgrade(alembic_config, "head")
 app = FastAPI(title="SobraCero API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
