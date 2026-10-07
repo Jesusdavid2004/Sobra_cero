@@ -36,27 +36,47 @@ export default function AppProviders({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [preferencesReady, setPreferencesReady] = useState(false);
 
   useEffect(() => {
-    const savedLang = (window.localStorage.getItem("lang") as Lang) || "en";
-    const savedTheme = (window.localStorage.getItem("theme") as Theme) || "light";
+    const storedLang = window.localStorage.getItem("sc_locale");
+    const savedLang =
+      storedLang === "en" || storedLang === "es"
+        ? storedLang
+        : navigator.language.toLowerCase().startsWith("es")
+          ? "es"
+          : "en";
+    const storedTheme = window.localStorage.getItem("sc_theme");
+    const legacyTheme = window.localStorage.getItem("theme");
+    const savedTheme =
+      storedTheme === "dark" || storedTheme === "light"
+        ? storedTheme
+        : legacyTheme === "dark" || legacyTheme === "light"
+          ? legacyTheme
+          : window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light";
     setLang(savedLang);
     setTheme(savedTheme);
     setToken(getToken());
+    setPreferencesReady(true);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
     }
   }, []);
 
   useEffect(() => {
+    if (!preferencesReady) return;
     document.documentElement.classList.toggle("dark", theme === "dark");
-    window.localStorage.setItem("theme", theme);
-  }, [theme]);
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("sc_theme", theme);
+  }, [preferencesReady, theme]);
 
   useEffect(() => {
+    if (!preferencesReady) return;
     document.documentElement.lang = lang;
-    window.localStorage.setItem("lang", lang);
-  }, [lang]);
+    window.localStorage.setItem("sc_locale", lang);
+  }, [lang, preferencesReady]);
 
   useEffect(() => {
     if (!token) {

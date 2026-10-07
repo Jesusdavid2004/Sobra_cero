@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
+from app.domain.exceptions import BatchAlreadyReservedError
 from app.models import Lot, Product, Shop, User
 from app.services import reserve_lot
 
@@ -42,10 +44,13 @@ def test_reservation_reduces_quantity(db):
     session, user, lot = db
     reservation = reserve_lot(session, lot.id, user.id, 2)
     assert reservation.quantity == 2
+    assert len(reservation.pickup_code) == 8
     assert session.get(Lot, lot.id).quantity == 1
+    with pytest.raises(BatchAlreadyReservedError):
+        reserve_lot(session, lot.id, user.id, 1)
 
 
 def test_reservation_rejects_insufficient_quantity(db):
     session, user, lot = db
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         reserve_lot(session, lot.id, user.id, 4)

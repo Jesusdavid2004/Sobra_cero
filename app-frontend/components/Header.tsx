@@ -30,18 +30,22 @@ export default function Header() {
         </Link>
         {token ? (
           <>
-            <Link
-              href="/shop"
-              className={`rounded-full border px-3 py-2 text-sm ${pathname === "/shop" ? "border-emerald-500 text-emerald-600" : ""}`}
-            >
-              {t.shop}
-            </Link>
-            <Link
-              href="/lots/new"
-              className={`rounded-full border px-3 py-2 text-sm ${pathname === "/lots/new" ? "border-emerald-500 text-emerald-600" : ""}`}
-            >
-              {t.newLot}
-            </Link>
+            {user?.role === "business" ? (
+              <>
+                <Link
+                  href="/shop"
+                  className={`rounded-full border px-3 py-2 text-sm ${pathname === "/shop" ? "border-emerald-500 text-emerald-600" : ""}`}
+                >
+                  {t.shop}
+                </Link>
+                <Link
+                  href="/lots/new"
+                  className={`rounded-full border px-3 py-2 text-sm ${pathname === "/lots/new" ? "border-emerald-500 text-emerald-600" : ""}`}
+                >
+                  {t.newLot}
+                </Link>
+              </>
+            ) : null}
             {user?.is_admin ? (
               <Link href="/admin" className="rounded-full border px-3 py-2 text-sm">
                 {t.admin}

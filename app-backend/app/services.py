@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from secrets import token_hex
 
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.exceptions import BatchAlreadyReservedError
 from app.llm import build_client
 from app.models import Donation, Lot, Promotion, Reservation
 from app.prompts import VARIANTS, build_prompt
@@ -17,10 +19,20 @@ def reserve_lot(db: Session, lot_id: int, user_id: int, quantity: int) -> Reserv
     expires_at = lot.expires_at.replace(tzinfo=timezone.utc) if lot.expires_at.tzinfo is None else lot.expires_at
     if expires_at <= datetime.now(timezone.utc):
         raise HTTPException(status_code=404, detail="Lot is unavailable")
+    existing_reservation = db.scalar(
+        select(Reservation).where(Reservation.lot_id == lot_id, Reservation.user_id == user_id)
+    )
+    if existing_reservation:
+        raise BatchAlreadyReservedError("You have already reserved this batch")
     if lot.quantity < quantity:
         raise HTTPException(status_code=409, detail="Not enough quantity available")
     lot.quantity -= quantity
-    reservation = Reservation(lot_id=lot_id, user_id=user_id, quantity=quantity)
+    reservation = Reservation(
+        lot_id=lot_id,
+        user_id=user_id,
+        quantity=quantity,
+        pickup_code=token_hex(4).upper(),
+    )
     db.add(reservation)
     db.commit()
     db.refresh(reservation)

@@ -12,7 +12,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r app-backend/requirements.txt
-      - run: pytest app-backend/tests
+      - run: pytest --cov=app.domain --cov=app.application --cov-fail-under=70 app-backend/tests
         env: { PYTHONPATH: app-backend }
       - run: black --check app-backend/app app-backend/tests
       - run: isort --check-only app-backend/app app-backend/tests

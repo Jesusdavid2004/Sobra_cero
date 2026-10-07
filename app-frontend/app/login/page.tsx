@@ -23,7 +23,8 @@ export default function LoginPage() {
     try {
       const { access_token } = await api.login(email, password);
       login(access_token);
-      router.push("/shop");
+      const currentUser = await api.me();
+      router.push(currentUser.role === "business" ? "/shop" : "/lots");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t.genericError);
     } finally {

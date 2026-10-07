@@ -4,11 +4,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import Header from "../../../components/Header";
-import { api, type Lot, type Promotion } from "../../../lib/api";
+import { ApiError, api, type Lot, type Promotion } from "../../../lib/api";
 import { useApp } from "../../../providers/AppProviders";
 
 export default function LotDetailPage() {
-  const { t, token, lang } = useApp();
+  const { t, token, lang, user } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const lotId = Number(params?.id);
@@ -44,11 +44,19 @@ export default function LotDetailPage() {
     setMessage("");
     setError("");
     try {
-      await api.reserve(lotId, Number(quantity));
-      setMessage(t.detailReserved);
+      const reservation = await api.reserve(lotId, Number(quantity));
+      setMessage(`${t.detailReserved} ${t.reservationPickupCode}: ${reservation.pickup_code}`);
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t.genericError);
+      setError(
+        cause instanceof ApiError && cause.code === "batch_already_reserved"
+          ? t.reservationAlreadyExists
+          : cause instanceof ApiError && cause.status === 409
+            ? t.reservationUnavailable
+            : cause instanceof Error
+              ? cause.message
+              : t.genericError,
+      );
     } finally {
       setBusy(false);
     }
@@ -72,12 +80,16 @@ export default function LotDetailPage() {
     return (
       <main className="min-h-screen">
         <Header />
-        <p className="px-6 pt-12 text-stone-500">{error || "…"}</p>
+        <p className="px-6 pt-12 text-stone-500">{error || t.detailLoading}</p>
       </main>
     );
   }
 
   const finalPrice = (lot.original_price_cents * (100 - lot.discount_percent)) / 100;
+  const currency = new Intl.NumberFormat(lang === "es" ? "es-CO" : "en-US", {
+    style: "currency",
+    currency: "USD",
+  });
 
   return (
     <main className="min-h-screen">
@@ -106,9 +118,9 @@ export default function LotDetailPage() {
           </span>
         </div>
         <p className="mt-4 text-2xl font-bold text-emerald-600">
-          ${(finalPrice / 100).toFixed(2)}
+          {currency.format(finalPrice / 100)}
           <span className="ml-2 text-base font-normal text-stone-400 line-through">
-            ${(lot.original_price_cents / 100).toFixed(2)}
+            {currency.format(lot.original_price_cents / 100)}
           </span>
         </p>
 
@@ -122,36 +134,42 @@ export default function LotDetailPage() {
         ) : null}
 
         <div className="mt-8 grid gap-6 md:grid-cols-2">
-          <form
-            onSubmit={reserve}
-            className="rounded-3xl border border-stone-200 p-6 dark:border-stone-800"
-          >
-            <h2 className="mb-4 text-xl font-bold">{t.reserve}</h2>
-            <label htmlFor="quantity" className="mb-1 block text-sm font-semibold">
-              {t.detailReserveQuantity}
-            </label>
-            <input
-              id="quantity"
-              type="number"
-              min={1}
-              max={lot.quantity}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="w-full rounded-xl border border-stone-300 px-4 py-3 dark:border-stone-700 dark:bg-stone-900"
-            />
-            <button
-              type="submit"
-              disabled={busy || lot.quantity === 0}
-              className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+          {user?.role === "business" ? (
+            <p className="rounded-3xl border border-stone-200 p-6 text-sm text-stone-600 dark:border-stone-800">
+              {t.detailBusinessCannotReserve}
+            </p>
+          ) : (
+            <form
+              onSubmit={reserve}
+              className="rounded-3xl border border-stone-200 p-6 dark:border-stone-800"
             >
-              {t.detailReserveSubmit}
-            </button>
-          </form>
+              <h2 className="mb-4 text-xl font-bold">{t.reserve}</h2>
+              <label htmlFor="quantity" className="mb-1 block text-sm font-semibold">
+                {t.detailReserveQuantity}
+              </label>
+              <input
+                id="quantity"
+                type="number"
+                min={1}
+                max={lot.quantity}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="w-full rounded-xl border border-stone-300 px-4 py-3 dark:border-stone-700 dark:bg-stone-900"
+              />
+              <button
+                type="submit"
+                disabled={busy || lot.quantity === 0}
+                className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {t.detailReserveSubmit}
+              </button>
+            </form>
+          )}
 
           <div className="rounded-3xl border border-stone-200 p-6 dark:border-stone-800">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold">{t.detailPromos}</h2>
-              {token ? (
+              {token && user?.role === "business" ? (
                 <button
                   onClick={generate}
                   disabled={busy}

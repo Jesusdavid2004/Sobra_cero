@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"business" | "customer">("customer");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -21,9 +22,9 @@ export default function RegisterPage() {
     setBusy(true);
     setError("");
     try {
-      const { access_token } = await api.register(email, password);
+      const { access_token } = await api.register(email, password, role);
       login(access_token);
-      router.push("/shop");
+      router.push(role === "business" ? "/shop" : "/lots");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t.genericError);
     } finally {
@@ -40,6 +41,23 @@ export default function RegisterPage() {
           <p className="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
         ) : null}
         <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label htmlFor="role" className="mb-1 block text-sm font-semibold">
+              {t.accountType}
+            </label>
+            <select
+              id="role"
+              required
+              value={role}
+              onChange={(event) =>
+                setRole(event.target.value === "business" ? "business" : "customer")
+              }
+              className="w-full rounded-xl border border-stone-300 px-4 py-3 dark:border-stone-700 dark:bg-stone-900"
+            >
+              <option value="customer">{t.customerAccount}</option>
+              <option value="business">{t.businessAccount}</option>
+            </select>
+          </div>
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-semibold">
               {t.authEmail}

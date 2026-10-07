@@ -13,7 +13,7 @@ SobraCero is a food-rescue marketplace: shops publish lots close to expiry and n
 
 The demo account is `demo@sobracero.local` with password `password123`. Do not use it outside local development.
 
-For a no-Docker backend test run, create a Python 3.12 virtual environment, install `app-backend/requirements.txt`, set `PYTHONPATH=app-backend`, and run `pytest app-backend/tests`.
+For a no-Docker backend test run, create a Python 3.12 virtual environment, install `app-backend/requirements.txt`, set `PYTHONPATH=app-backend`, and run `pytest app-backend/tests`. To verify the required application/domain coverage locally, run `pytest --cov=app.domain --cov=app.application --cov-fail-under=70 app-backend/tests` from `app-backend` with `PYTHONPATH=.`.
 
 ## MVP endpoints
 
@@ -24,7 +24,15 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
 
-The public listing supports `expires_in`, `min_discount` and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
+The public listing supports `expires_in`, `min_discount`, `category`, `business_type`, and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
+
+## Waste-risk workflow
+
+Business accounts can load deterministic, synthetic 60-day sales history from **Dashboard → Load 60 days of sample data**. The backend keeps that history private to the shop owner and uses it to calculate an explainable, weekday-adjusted waste-risk score for each active lot. The dashboard displays estimated unsold units and an English or Spanish recommendation.
+
+To load sample history from a local backend environment, run `python generate_synthetic_data.py` from `app-backend`. With Docker, run `docker compose exec backend python generate_synthetic_data.py`. The script is safe to rerun; existing product/date records are left unchanged.
+
+New accounts choose a business or customer role. Business accounts manage shops, products, lots, and forecasts; customer accounts reserve lots. Successful reservations return a unique pickup code. Schema migrations are applied automatically when the API starts.
 
 ## Connected flow (v0.2.0)
 
@@ -55,11 +63,15 @@ Any OpenAI-compatible endpoint works by setting `LLM_BASE_URL` and `LLM_MODEL`. 
 
 ## Quality and scope notes
 
-- CI runs `pytest`, `black`, `isort`, `flake8` and `mypy` for the backend and `eslint`, `prettier` and `next build` for the frontend on pushes/PRs to `develop`.
-- Rate limiting (in-memory sliding window) protects image uploads and promo generation.
+- CI runs backend tests with at least 70% coverage for domain/application, plus `black`, `isort`, `flake8` and `mypy`; the frontend runs `eslint`, `prettier` and `next build`.
+- In-memory sliding-window rate limits protect reservations, image uploads and promo generation.
 - Alembic is included for migration workflows; the MVP also creates tables on startup so a fresh Docker environment is immediately usable.
 - Images are stored through an S3-compatible adapter backed by **LocalStack** in Docker (MinIO was archived upstream in 2026). Set `MINIO_ENDPOINT`/`MINIO_PUBLIC_URL` to point at any S3-compatible service (MinIO, AWS S3, LocalStack...).
 
 ## Demo flow
 
 Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker with `docker compose up worker` to process promo jobs asynchronously.
+
+### Resumen en español
+
+SobraCero conecta comercios con personas que quieren rescatar alimentos próximos a vencer. Las cuentas de comercio pueden cargar 60 días de ventas de ejemplo y consultar una estimación explicable del riesgo de desperdicio por lote; esos datos solo son visibles para el comercio propietario. Las cuentas de cliente pueden reservar lotes y reciben un código único para recogerlos. El OCR de fechas y las cuentas para bancos de alimentos todavía no están implementados.

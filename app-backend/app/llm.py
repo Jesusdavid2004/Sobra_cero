@@ -55,6 +55,16 @@ class MockLLMClient(BaseLLMClient):
     """Deterministic fallback that never requires network access or API keys."""
 
     def complete(self, prompt: str) -> str:
+        if "Respond in Spanish." in prompt:
+            return (
+                "Publica ahora con un descuento del 25% para acelerar la venta. "
+                "Si quedan pocas horas y no se reserva, ofrece las unidades restantes como donación."
+            )
+        if "Respond in English." in prompt:
+            return (
+                "List it now with a 25% discount to speed up sales. "
+                "If only a few hours remain and it is not reserved, donate the remaining units."
+            )
         first_line = prompt.splitlines()[0] if prompt.splitlines() else "Rescue food"
         return f"{first_line[:70]} - grab it before it expires!"
 
