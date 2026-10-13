@@ -10,10 +10,11 @@ from __future__ import annotations
 from io import BytesIO
 
 import boto3
-from botocore.client import Config
+from botocore.client import BaseClient, Config
 from botocore.exceptions import ClientError
 
 from app.config import settings
+from app.domain.rules import SIGNED_IMAGE_URL_TTL_SECONDS
 
 
 class ObjectStorage:
@@ -34,10 +35,11 @@ class ObjectStorage:
         self.bucket = bucket
         self.public_url = public_url.rstrip("/")
         self.secure = secure
-        self._client = None
+        self._client: BaseClient | None = None
+        self._signing_client: BaseClient | None = None
 
     @property
-    def client(self):
+    def client(self) -> BaseClient:
         """Lazily build the boto3 S3 client on first use."""
         if self._client is None:
             self._client = boto3.client(
@@ -45,7 +47,7 @@ class ObjectStorage:
                 endpoint_url=f"{'https' if self.secure else 'http'}://{self.endpoint}",
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
-                config=Config(signature_version="s3v4"),
+                config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
                 region_name="us-east-1",
             )
         return self._client
@@ -57,14 +59,29 @@ class ObjectStorage:
         except ClientError:
             self.client.create_bucket(Bucket=self.bucket)
 
-    def upload(self, key: str, data: bytes, content_type: str) -> str:
-        """Store an object and return its public URL."""
+    def upload(self, key: str, data: bytes, content_type: str) -> None:
+        """Store an object without making it publicly readable."""
         self.ensure_bucket()
         self.client.put_object(Bucket=self.bucket, Key=key, Body=BytesIO(data), ContentType=content_type)
-        return self.url(key)
 
-    def url(self, key: str) -> str:
-        return f"{self.public_url}/{self.bucket}/{key}"
+    def signed_url(self, key: str) -> str:
+        """Create a short-lived read URL that is reachable from the user's network."""
+        if self._signing_client is None:
+            self._signing_client = boto3.client(
+                "s3",
+                endpoint_url=self.public_url,
+                aws_access_key_id=self.access_key,
+                aws_secret_access_key=self.secret_key,
+                config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
+                region_name="us-east-1",
+            )
+        return str(
+            self._signing_client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self.bucket, "Key": key},
+                ExpiresIn=SIGNED_IMAGE_URL_TTL_SECONDS,
+            )
+        )
 
 
 _storage: ObjectStorage | None = None

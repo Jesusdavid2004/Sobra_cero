@@ -7,14 +7,17 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+from app.domain.entities import BatchStatus, ReservationStatus
 
 
 def now_utc() -> datetime:
@@ -58,6 +61,12 @@ class Product(Base):
 
 class Lot(Base):
     __tablename__ = "lots"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'active', 'sold_out', 'expired', 'donated', 'cancelled')",
+            name="ck_lots_status",
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id"))
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"))
@@ -68,6 +77,10 @@ class Lot(Base):
     discount_percent: Mapped[int] = mapped_column(Integer, default=30)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default=BatchStatus.ACTIVE.value, server_default=BatchStatus.ACTIVE.value, index=True
+    )
     shop: Mapped[Shop] = relationship(back_populates="lots")
     product: Mapped[Product] = relationship(back_populates="lots")
     promotions: Mapped[list["Promotion"]] = relationship(back_populates="lot", cascade="all, delete-orphan")
@@ -83,11 +96,28 @@ class Lot(Base):
 
 class Reservation(Base):
     __tablename__ = "reservations"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('reserved', 'cancelled', 'picked_up', 'expired')",
+            name="ck_reservations_status",
+        ),
+        Index(
+            "uq_reservations_active_lot_user",
+            "lot_id",
+            "user_id",
+            unique=True,
+            sqlite_where=text("status = 'reserved'"),
+            postgresql_where=text("status = 'reserved'"),
+        ),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id"))
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     quantity: Mapped[int] = mapped_column(Integer)
     pickup_code: Mapped[str] = mapped_column(String(8), unique=True, index=True)
+    status: Mapped[str] = mapped_column(
+        String(20), default=ReservationStatus.RESERVED.value, server_default=ReservationStatus.RESERVED.value
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 

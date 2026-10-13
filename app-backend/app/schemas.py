@@ -76,9 +76,18 @@ class LotCreate(BaseModel):
     expires_at: datetime
 
 
-class LotOut(LotCreate):
+class LotOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
+    shop_id: int
+    product_id: int
+    title: str
+    description: str
+    quantity: int = Field(ge=0, le=10000)
+    original_price_cents: int = Field(ge=0)
+    discount_percent: int = Field(ge=0, le=MAX_DISCOUNT_PERCENT)
+    expires_at: datetime
+    status: Literal["draft", "active", "sold_out", "expired", "donated", "cancelled"] = "active"
     image_url: str | None = None
     category: str = "other"
     business_type: Literal["restaurant", "supermarket"] = "restaurant"
@@ -90,6 +99,10 @@ class ReservationCreate(BaseModel):
 
 class DonationCreate(BaseModel):
     quantity: int = Field(gt=0, le=10000)
+
+
+class PickupConfirmation(BaseModel):
+    pickup_code: str = Field(min_length=8, max_length=8, pattern="^[A-F0-9]{8}$")
 
 
 class PromotionOut(BaseModel):

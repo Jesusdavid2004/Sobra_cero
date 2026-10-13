@@ -48,9 +48,12 @@ def test_upgrade_creates_the_complete_schema_from_an_empty_database(tmp_path: Pa
     assert "ix_reservations_pickup_code" in {index["name"] for index in inspector.get_indexes("reservations")}
     assert "model_version" in {column["name"] for column in inspector.get_columns("waste_predictions")}
     with engine.connect() as connection:
-        assert (
-            connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004_sales_forecast_model_registry"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+            "0005_lot_reservation_lifecycle_and_private_images"
         )
+    assert {"status", "image_key"} <= {column["name"] for column in inspector.get_columns("lots")}
+    assert "status" in {column["name"] for column in inspector.get_columns("reservations")}
+    assert "uq_reservations_active_lot_user" in {index["name"] for index in inspector.get_indexes("reservations")}
     engine.dispose()
 
 

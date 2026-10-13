@@ -36,6 +36,14 @@ services:
       DATABASE_URL: postgresql+psycopg2://sobracero:sobracero@postgres:5432/sobracero
       REDIS_URL: redis://redis:6379/0
     depends_on: [postgres, redis]
+  scheduler:
+    build: ./app-backend
+    command: celery -A app.worker.celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      DATABASE_URL: ******postgres:5432/sobracero
+      REDIS_URL: redis://redis:6379/0
+    depends_on: [postgres, redis]
   frontend:
     build: ./app-frontend
     environment:

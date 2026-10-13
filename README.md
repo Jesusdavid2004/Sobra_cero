@@ -21,6 +21,8 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 - `GET/POST /api/v1/shops`, `GET/POST /api/v1/shops/{id}/products`
 - `GET/POST /api/v1/lots`, `GET /api/v1/lots/{id}`, `POST /api/v1/lots/{id}/image`
 - `POST /api/v1/lots/{id}/reserve`, `POST /api/v1/lots/{id}/donate`
+- `POST /api/v1/lots/{id}/cancel`
+- `POST /api/v1/reservations/{id}/cancel`, `POST /api/v1/reservations/{id}/pickup`
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
 - `POST /api/v1/admin/models/sales-forecast/train` (admin only)
@@ -101,12 +103,13 @@ Any OpenAI-compatible endpoint works by setting `LLM_BASE_URL` and `LLM_MODEL`. 
 
 - CI runs backend tests with at least 70% coverage for domain/application, plus `black`, `isort`, `flake8` and `mypy`; the frontend runs `eslint`, `prettier` and `next build`.
 - In-memory sliding-window rate limits protect reservations, image uploads and promo generation.
+- Reservations atomically consume lot stock; customers can cancel active reservations and the owning shop can confirm pickup with its code. Celery Beat expires lots and their outstanding reservations every minute (`docker compose up scheduler`).
 - Alembic is the source of truth for the database schema. The API and both backend data scripts apply pending migrations before accessing the database.
-- Images are stored through an S3-compatible adapter backed by **LocalStack** in Docker (MinIO was archived upstream in 2026). Set `MINIO_ENDPOINT`/`MINIO_PUBLIC_URL` to point at any S3-compatible service (MinIO, AWS S3, LocalStack...).
+- Images are validated by their actual JPEG/PNG/WebP signatures, limited to 5 MiB, stored under random private keys and served with short-lived signed URLs. The adapter is backed by **LocalStack** in Docker. Set `MINIO_ENDPOINT`/`MINIO_PUBLIC_URL` to point at any S3-compatible service (MinIO, AWS S3, LocalStack...).
 
 ## Demo flow
 
-Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker with `docker compose up worker` to process promo jobs asynchronously.
+Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker and scheduler with `docker compose up worker scheduler` to process promo jobs and lot expiration asynchronously.
 
 ### Resumen en español
 

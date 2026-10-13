@@ -17,6 +17,14 @@ class BatchStatus(StrEnum):
     SOLD_OUT = "sold_out"
     EXPIRED = "expired"
     DONATED = "donated"
+    CANCELLED = "cancelled"
+
+
+class ReservationStatus(StrEnum):
+    RESERVED = "reserved"
+    CANCELLED = "cancelled"
+    PICKED_UP = "picked_up"
+    EXPIRED = "expired"
 
 
 class OfferType(StrEnum):

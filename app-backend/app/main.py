@@ -1,7 +1,10 @@
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
+from botocore.exceptions import BotoCoreError
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
@@ -25,7 +28,7 @@ from app.domain.exceptions import (
     InvalidSalesHistoryCsvError,
     RefreshSessionStoreUnavailableError,
 )
-from app.domain.rules import MAX_SALES_HISTORY_IMPORT_BYTES
+from app.domain.rules import MAX_IMAGE_UPLOAD_BYTES, MAX_SALES_HISTORY_IMPORT_BYTES
 from app.migrations import upgrade_database_schema
 from app.models import Donation, Lot, Product, Promotion, Reservation, Shop, User
 from app.presentation.routers.auth import router as auth_router
@@ -33,6 +36,7 @@ from app.schemas import (
     DonationCreate,
     LotCreate,
     LotOut,
+    PickupConfirmation,
     ProductCreate,
     ProductOut,
     PromotionOut,
@@ -44,7 +48,14 @@ from app.schemas import (
     ShopOut,
     WasteRiskOut,
 )
-from app.services import build_promotions, donate_lot, reserve_lot
+from app.services import (
+    build_promotions,
+    cancel_lot,
+    cancel_reservation,
+    confirm_reservation_pickup,
+    donate_lot,
+    reserve_lot,
+)
 from app.storage import get_storage
 from app.synthetic_sales import DEFAULT_HISTORY_DAYS, generate_shop_sales_history
 from app.worker import generate_promotions_task
@@ -96,7 +107,7 @@ _rate_buckets: dict[str, list[float]] = defaultdict(list)
 MODEL_TRAINING_REQUESTS_PER_MINUTE = 2
 
 
-def rate_limited(limit: int, window_seconds: int = 60):
+def rate_limited(limit: int, window_seconds: int = 60) -> Callable[[Request], None]:
     """Simple in-memory sliding-window rate limiter keyed by client IP."""
 
     def dependency(request: Request) -> None:
@@ -112,6 +123,24 @@ def rate_limited(limit: int, window_seconds: int = 60):
         bucket.append(now)
 
     return dependency
+
+
+def lot_response(lot: Lot) -> LotOut:
+    image_url = lot.image_url
+    if lot.image_key:
+        try:
+            image_url = get_storage().signed_url(lot.image_key)
+        except BotoCoreError as exc:
+            raise HTTPException(status_code=503, detail="Image storage unavailable") from exc
+    return LotOut.model_validate(lot).model_copy(update={"image_url": image_url})
+
+
+def image_signature_matches(content: bytes, content_type: str) -> bool:
+    if content_type == "image/jpeg":
+        return content.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return content.startswith(b"\x89PNG\r\n\x1a\n")
+    return len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP"
 
 
 def require_business(user: User) -> None:
@@ -300,7 +329,7 @@ def shop_waste_risk(
 
 
 @app.post("/api/v1/lots", response_model=LotOut, status_code=201)
-def create_lot(data: LotCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> Lot:
+def create_lot(data: LotCreate, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LotOut:
     require_business(user)
     shop = db.get(Shop, data.shop_id)
     if not shop or shop.owner_id != user.id:
@@ -312,7 +341,7 @@ def create_lot(data: LotCreate, db: Session = Depends(get_db), user: User = Depe
     db.add(lot)
     db.commit()
     db.refresh(lot)
-    return lot
+    return lot_response(lot)
 
 
 @app.post(
@@ -322,24 +351,28 @@ def create_lot(data: LotCreate, db: Session = Depends(get_db), user: User = Depe
 )
 async def upload_image(
     lot_id: int, image: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(current_user)
-) -> Lot:
+) -> LotOut:
     require_business(user)
     if image.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(415, "Unsupported image type")
-    content = await image.read()
-    if len(content) > 5 * 1024 * 1024:
-        raise HTTPException(413, "Image is too large")
     lot = db.get(Lot, lot_id)
     if not lot or lot.shop.owner_id != user.id:
         raise HTTPException(404, "Lot not found")
-    key = f"lots/{lot_id}/{image.filename or 'image.jpg'}"
+    content = await image.read(MAX_IMAGE_UPLOAD_BYTES + 1)
+    if len(content) > MAX_IMAGE_UPLOAD_BYTES:
+        raise HTTPException(413, "Image is too large")
+    if not image_signature_matches(content, image.content_type):
+        raise HTTPException(415, "Image content does not match its declared type")
+    key = f"lots/{lot_id}/{uuid4().hex}"
     try:
-        lot.image_url = get_storage().upload(key, content, image.content_type)
-    except Exception as exc:
+        get_storage().upload(key, content, image.content_type)
+    except BotoCoreError as exc:
         raise HTTPException(503, "Image storage unavailable") from exc
+    lot.image_key = key
+    lot.image_url = None
     db.commit()
     db.refresh(lot)
-    return lot
+    return lot_response(lot)
 
 
 @app.get("/api/v1/lots", response_model=list[LotOut])
@@ -353,8 +386,12 @@ def list_lots(
     lng_min: float | None = Query(None, ge=-180, le=180),
     lng_max: float | None = Query(None, ge=-180, le=180),
     db: Session = Depends(get_db),
-) -> list[Lot]:
-    query = select(Lot).where(Lot.quantity > 0)
+) -> list[LotOut]:
+    query = select(Lot).where(
+        Lot.quantity > 0,
+        Lot.status == "active",
+        Lot.expires_at > datetime.now(timezone.utc),
+    )
     has_location_filter = any(value is not None for value in (lat_min, lat_max, lng_min, lng_max))
     if category is not None or business_type is not None or has_location_filter:
         query = query.join(Lot.product).join(Lot.shop)
@@ -376,15 +413,15 @@ def list_lots(
         query = query.where(Shop.longitude >= lng_min)
     if lng_max is not None:
         query = query.where(Shop.longitude <= lng_max)
-    return list(db.scalars(query.order_by(Lot.expires_at)))
+    return [lot_response(lot) for lot in db.scalars(query.order_by(Lot.expires_at))]
 
 
 @app.get("/api/v1/lots/{lot_id}", response_model=LotOut)
-def lot_detail(lot_id: int, db: Session = Depends(get_db)) -> Lot:
+def lot_detail(lot_id: int, db: Session = Depends(get_db)) -> LotOut:
     lot = db.get(Lot, lot_id)
     if not lot:
         raise HTTPException(404, "Lot not found")
-    return lot
+    return lot_response(lot)
 
 
 @app.post(
@@ -431,8 +468,45 @@ def train_sales_forecast_model(
 def donate(
     lot_id: int, data: DonationCreate, db: Session = Depends(get_db), user: User = Depends(current_user)
 ) -> dict[str, int | str]:
+    require_business(user)
+    lot = db.get(Lot, lot_id)
+    if lot is None or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Lot not found")
     donation = donate_lot(db, lot_id, data.quantity)
     return {"id": donation.id, "status": "donated", "quantity": donation.quantity}
+
+
+@app.post("/api/v1/lots/{lot_id}/cancel", response_model=LotOut)
+def cancel_lot_route(lot_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)) -> LotOut:
+    require_business(user)
+    lot = db.get(Lot, lot_id)
+    if lot is None or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Lot not found")
+    return lot_response(cancel_lot(db, lot_id))
+
+
+@app.post("/api/v1/reservations/{reservation_id}/cancel")
+def cancel_reservation_route(
+    reservation_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
+) -> dict[str, int | str]:
+    reservation = cancel_reservation(db, reservation_id, user.id)
+    return {"id": reservation.id, "status": reservation.status, "quantity": reservation.quantity}
+
+
+@app.post("/api/v1/reservations/{reservation_id}/pickup")
+def confirm_pickup(
+    reservation_id: int,
+    data: PickupConfirmation,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> dict[str, int | str]:
+    require_business(user)
+    reservation = db.get(Reservation, reservation_id)
+    lot = db.get(Lot, reservation.lot_id) if reservation else None
+    if lot is None or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Reservation not found")
+    reservation = confirm_reservation_pickup(db, reservation_id, data.pickup_code)
+    return {"id": reservation.id, "status": reservation.status, "quantity": reservation.quantity}
 
 
 @app.post(

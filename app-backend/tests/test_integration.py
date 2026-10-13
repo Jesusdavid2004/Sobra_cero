@@ -90,6 +90,74 @@ def test_public_vitrine_and_reservation_flow():
     assert duplicate.json()["code"] == "batch_already_reserved"
 
 
+def test_reservation_can_be_cancelled_and_picked_up_by_the_shop():
+    reset_db()
+    client, business_headers = register_client()
+    lot_id = create_lot(client, business_headers)
+    _, customer_headers = register_client("customer", "customer@example.com")
+
+    reservation_response = client.post(
+        f"/api/v1/lots/{lot_id}/reserve",
+        json={"quantity": 3},
+        headers=customer_headers,
+    )
+    reservation = reservation_response.json()
+    assert reservation_response.status_code == 201
+
+    cancelled = client.post(
+        f"/api/v1/reservations/{reservation['id']}/cancel",
+        headers=customer_headers,
+    )
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    assert client.get(f"/api/v1/lots/{lot_id}").json()["quantity"] == 10
+
+    second_reservation = client.post(
+        f"/api/v1/lots/{lot_id}/reserve",
+        json={"quantity": 2},
+        headers=customer_headers,
+    ).json()
+    pickup = client.post(
+        f"/api/v1/reservations/{second_reservation['id']}/pickup",
+        json={"pickup_code": second_reservation["pickup_code"]},
+        headers=business_headers,
+    )
+    assert pickup.status_code == 200
+    assert pickup.json()["status"] == "picked_up"
+    assert (
+        client.post(
+            f"/api/v1/reservations/{second_reservation['id']}/cancel",
+            headers=customer_headers,
+        ).status_code
+        == 409
+    )
+
+
+def test_shop_can_cancel_a_lot_and_its_active_reservations():
+    reset_db()
+    client, business_headers = register_client()
+    lot_id = create_lot(client, business_headers)
+    _, customer_headers = register_client("customer", "customer@example.com")
+    reservation = client.post(
+        f"/api/v1/lots/{lot_id}/reserve",
+        json={"quantity": 2},
+        headers=customer_headers,
+    ).json()
+
+    cancelled_lot = client.post(f"/api/v1/lots/{lot_id}/cancel", headers=business_headers)
+
+    assert cancelled_lot.status_code == 200
+    assert cancelled_lot.json()["status"] == "cancelled"
+    assert cancelled_lot.json()["quantity"] == 0
+    assert (
+        client.post(
+            f"/api/v1/reservations/{reservation['id']}/cancel",
+            headers=customer_headers,
+        ).status_code
+        == 409
+    )
+
+
 def test_reservation_fails_when_quantity_exhausted():
     reset_db()
     client, business_headers = register_client()
@@ -129,6 +197,46 @@ def test_upload_rejects_unsupported_type():
         files={"image": ("notes.txt", b"not an image", "text/plain")},
         headers=headers,
     )
+    assert response.status_code == 415
+
+
+def test_image_upload_uses_random_private_key_and_signed_url(monkeypatch):
+    reset_db()
+    client, headers = register_client()
+    lot_id = create_lot(client, headers)
+    uploaded = {}
+
+    class StorageStub:
+        def upload(self, key, content, content_type):
+            uploaded.update(key=key, content=content, content_type=content_type)
+
+        def signed_url(self, key):
+            return f"https://images.example/{key}?signature=short-lived"
+
+    monkeypatch.setattr(main, "get_storage", lambda: StorageStub())
+    response = client.post(
+        f"/api/v1/lots/{lot_id}/image",
+        files={"image": ("../../private.png", b"\x89PNG\r\n\x1a\nvalid-test-data", "image/png")},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert uploaded["key"].startswith(f"lots/{lot_id}/")
+    assert "private.png" not in uploaded["key"]
+    assert response.json()["image_url"].startswith("https://images.example/")
+
+
+def test_image_upload_rejects_forged_image_content():
+    reset_db()
+    client, headers = register_client()
+    lot_id = create_lot(client, headers)
+
+    response = client.post(
+        f"/api/v1/lots/{lot_id}/image",
+        files={"image": ("image.png", b"not actually a png", "image/png")},
+        headers=headers,
+    )
+
     assert response.status_code == 415
 
 
