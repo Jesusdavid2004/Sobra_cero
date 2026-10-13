@@ -392,6 +392,9 @@ export default function ShopPage() {
                                 <p className="mt-1 text-sm leading-6 text-[#3d493c]">
                                   {item.recommendation}
                                 </p>
+                                <p className="mt-2 text-xs text-stone-500">
+                                  {t.dashboardRecommendationDisclaimer}
+                                </p>
                               </div>
                               <p className="mt-3 text-xs text-stone-500">
                                 {t.dashboardDataPoints.replace("{count}", String(item.data_points))}

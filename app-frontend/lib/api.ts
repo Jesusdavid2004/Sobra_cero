@@ -1,3 +1,15 @@
+import { z } from "zod";
+
+const ExpiryScanSuggestionSchema = z.object({
+  id: z.number().int(),
+  printed_date: z.string().max(80).nullable(),
+  expires_on: z.iso.date().nullable(),
+  confidence: z.number().min(0).max(1),
+  status: z.enum(["awaiting_confirmation", "confirmed", "rejected", "unreadable"]),
+});
+
+export type ExpiryScanSuggestion = z.infer<typeof ExpiryScanSuggestionSchema>;
+
 export type User = {
   id: number;
   email: string;
@@ -218,4 +230,24 @@ export const api = {
     request<WasteRisk[]>(`/shops/${shopId}/waste-risk?language=${language}`),
   loadSampleSalesHistory: (shopId: number) =>
     request<SalesHistoryCreated>(`/shops/${shopId}/sales-history/sample`, { method: "POST" }),
+  expiryScans: async (lotId: number) =>
+    ExpiryScanSuggestionSchema.array().parse(await request<unknown>(`/lots/${lotId}/expiry-scans`)),
+  scanExpiryDate: async (lotId: number, language: string) => {
+    const params = new URLSearchParams({ language });
+    return ExpiryScanSuggestionSchema.parse(
+      await request<unknown>(`/lots/${lotId}/expiry-scans?${params}`, { method: "POST" }),
+    );
+  },
+  confirmExpiryScan: async (lotId: number, suggestionId: number) =>
+    ExpiryScanSuggestionSchema.parse(
+      await request<unknown>(`/lots/${lotId}/expiry-scans/${suggestionId}/confirm`, {
+        method: "POST",
+      }),
+    ),
+  rejectExpiryScan: async (lotId: number, suggestionId: number) =>
+    ExpiryScanSuggestionSchema.parse(
+      await request<unknown>(`/lots/${lotId}/expiry-scans/${suggestionId}/reject`, {
+        method: "POST",
+      }),
+    ),
 };

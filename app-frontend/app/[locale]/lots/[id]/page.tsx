@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import Header from "@/components/Header";
+import ExpiryScanPanel from "@/components/ExpiryScanPanel";
 import { ApiError, api, type Lot, type Promotion } from "@/lib/api";
 import { useApp } from "@/providers/AppProviders";
 
@@ -125,6 +126,20 @@ export default function LotDetailPage() {
             {currency.format(lot.original_price_cents / 100)}
           </span>
         </p>
+
+        {authReady && token && (user?.role === "business" || user?.is_admin) ? (
+          <ExpiryScanPanel
+            lotId={lot.id}
+            shopId={lot.shop_id}
+            hasImage={Boolean(lot.image_url)}
+            onConfirmed={() => {
+              void api
+                .lot(lotId)
+                .then(setLot)
+                .catch(() => setError(t.genericError));
+            }}
+          />
+        ) : null}
 
         {message ? (
           <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
