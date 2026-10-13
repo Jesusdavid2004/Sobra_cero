@@ -23,6 +23,7 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 - `POST /api/v1/lots/{id}/reserve`, `POST /api/v1/lots/{id}/donate`
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
+- `POST /api/v1/products/{id}/sales-history/csv` (business owner/admin; CSV columns: `sales_date,units_sold,had_promotion`)
 
 The public listing supports `expires_in`, `min_discount`, `category`, `business_type`, and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
 
@@ -50,11 +51,19 @@ To load sample history from a local backend environment, run `python generate_sy
 
 New accounts choose a business or customer role. Business accounts manage shops, products, lots, and forecasts; customer accounts reserve lots. Successful reservations return a unique pickup code. Schema migrations are applied automatically when the API starts.
 
+Business owners can also import sales history from a UTF-8 CSV with the columns
+`sales_date,units_sold,had_promotion` (`YYYY-MM-DD`, non-negative integer, and
+`true`/`false`). Upload it as the `file` field to
+`POST /api/v1/products/{id}/sales-history/csv`. Files are limited to 1 MiB and
+90 data rows; a repeated product/date is updated, while invalid files are
+rejected without partially importing rows. Sales history is private to the
+product's shop owner and platform admins.
+
 ## Connected flow (v0.2.0)
 
 The full demo flow is wired end-to-end:
 
-1. Register/login from the UI (`/login`, `/register`) → JWT stored locally.
+1. Register/login from the UI (`/login`, `/register`) → short-lived access token kept in memory and a rotating refresh token in an HttpOnly cookie.
 2. Dashboard `/shop`: create shops and products.
 3. `/lots/new`: publish a lot (image optional, compressed on the client via canvas and stored in **S3-compatible storage** via LocalStack).
 4. Vitrine `/`: lots appear with price, discount and expiry; reserve directly or open `/lots/{id}`.
@@ -81,7 +90,7 @@ Any OpenAI-compatible endpoint works by setting `LLM_BASE_URL` and `LLM_MODEL`. 
 
 - CI runs backend tests with at least 70% coverage for domain/application, plus `black`, `isort`, `flake8` and `mypy`; the frontend runs `eslint`, `prettier` and `next build`.
 - In-memory sliding-window rate limits protect reservations, image uploads and promo generation.
-- Alembic is included for migration workflows; the MVP also creates tables on startup so a fresh Docker environment is immediately usable.
+- Alembic is the source of truth for the database schema. The API and both backend data scripts apply pending migrations before accessing the database.
 - Images are stored through an S3-compatible adapter backed by **LocalStack** in Docker (MinIO was archived upstream in 2026). Set `MINIO_ENDPOINT`/`MINIO_PUBLIC_URL` to point at any S3-compatible service (MinIO, AWS S3, LocalStack...).
 
 ## Demo flow

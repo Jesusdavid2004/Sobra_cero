@@ -2,11 +2,12 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 import app.main as main
 from app.application.dto import DailySales, PredictionEstimate
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
-from app.db import Base, engine
+from app.db import Base, SessionLocal, engine
 from app.domain.exceptions import (
     InsufficientSalesHistoryError,
     RiskScoreValidationError,
@@ -15,6 +16,7 @@ from app.domain.value_objects import RiskScore
 from app.infrastructure.prediction.weighted_moving_average import (
     WeightedMovingAveragePredictionModel,
 )
+from app.models import SalesHistory
 
 
 def reset_db() -> None:
@@ -248,6 +250,98 @@ def test_manual_sales_history_is_validated_and_owner_only():
         ).status_code
         == 404
     )
+
+
+def test_shop_and_product_catalog_reads_are_limited_to_owner_or_admin():
+    reset_db()
+    client = TestClient(main.app)
+    owner_headers = create_business(client, "catalog-owner@example.com")
+    other_headers = create_business(client, "catalog-other@example.com")
+    shop_id, _, _ = create_product_and_lot(client, owner_headers)
+
+    assert client.get("/api/v1/shops").status_code == 401
+    assert [shop["id"] for shop in client.get("/api/v1/shops", headers=owner_headers).json()] == [shop_id]
+    assert client.get("/api/v1/shops", headers=other_headers).json() == []
+    assert client.get(f"/api/v1/shops/{shop_id}/products", headers=owner_headers).status_code == 200
+    assert client.get(f"/api/v1/shops/{shop_id}/products", headers=other_headers).status_code == 404
+    assert client.get(f"/api/v1/shops/{shop_id}/products").status_code == 401
+
+
+def test_sales_csv_import_creates_and_updates_history_for_owner():
+    reset_db()
+    client = TestClient(main.app)
+    owner_headers = create_business(client, "csv-owner@example.com")
+    other_headers = create_business(client, "csv-other@example.com")
+    _, product_id, _ = create_product_and_lot(client, owner_headers)
+    csv_bytes = b"sales_date,units_sold,had_promotion\n2026-10-01,5,false\n2026-10-02,3,true\n"
+
+    anonymous = client.post(
+        f"/api/v1/products/{product_id}/sales-history/csv",
+        files={"file": ("history.csv", csv_bytes, "text/csv")},
+    )
+    first = client.post(
+        f"/api/v1/products/{product_id}/sales-history/csv",
+        files={"file": ("history.csv", csv_bytes, "text/csv")},
+        headers=owner_headers,
+    )
+    second = client.post(
+        f"/api/v1/products/{product_id}/sales-history/csv",
+        files={
+            "file": (
+                "history.csv",
+                b"sales_date,units_sold,had_promotion\n2026-10-01,9,true\n2026-10-03,7,false\n",
+                "text/csv",
+            )
+        },
+        headers=owner_headers,
+    )
+    forbidden = client.post(
+        f"/api/v1/products/{product_id}/sales-history/csv",
+        files={"file": ("history.csv", csv_bytes, "text/csv")},
+        headers=other_headers,
+    )
+
+    assert anonymous.status_code == 401
+    assert first.status_code == 201
+    assert first.json() == {"created": 2, "existing": 0}
+    assert second.status_code == 201
+    assert second.json() == {"created": 1, "existing": 1}
+    assert forbidden.status_code == 404
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(SalesHistory).where(SalesHistory.product_id == product_id).order_by(SalesHistory.sales_date)
+        ).all()
+        assert [(row.units_sold, row.had_promotion) for row in rows] == [(9, True), (3, True), (7, False)]
+
+
+def test_sales_csv_import_rejects_invalid_rows_and_oversized_files():
+    reset_db()
+    client = TestClient(main.app)
+    owner_headers = create_business(client, "csv-invalid@example.com")
+    _, product_id, _ = create_product_and_lot(client, owner_headers)
+
+    malformed = client.post(
+        f"/api/v1/products/{product_id}/sales-history/csv",
+        files={
+            "file": (
+                "history.csv",
+                b"sales_date,units_sold,had_promotion\n2026-10-01,5,false\n2026-10-02,-1,true\n",
+                "text/csv",
+            )
+        },
+        headers=owner_headers,
+    )
+    oversized = client.post(
+        f"/api/v1/products/{product_id}/sales-history/csv",
+        files={"file": ("history.csv", b"x" * (main.MAX_SALES_HISTORY_IMPORT_BYTES + 1), "text/csv")},
+        headers=owner_headers,
+    )
+
+    assert malformed.status_code == 422
+    assert malformed.json()["code"] == "invalid_sales_history_csv"
+    assert oversized.status_code == 413
+    with SessionLocal() as db:
+        assert db.scalar(select(SalesHistory.id).where(SalesHistory.product_id == product_id)) is None
 
 
 def test_waste_risk_returns_typed_insufficient_history_error():

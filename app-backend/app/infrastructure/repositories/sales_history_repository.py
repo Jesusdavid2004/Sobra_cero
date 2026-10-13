@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -26,6 +27,38 @@ class PostgresSalesHistoryRepository(SalesHistoryRepository):
             )
             for entry in entries
         ]
+
+    def upsert_many(self, product_id: int, entries: Sequence[DailySales]) -> tuple[int, int]:
+        if not entries:
+            return 0, 0
+        dates = [entry.sales_date for entry in entries]
+        existing_by_date = {
+            entry.sales_date: entry
+            for entry in self._session.scalars(
+                select(SalesHistory).where(
+                    SalesHistory.product_id == product_id,
+                    SalesHistory.sales_date.in_(dates),
+                )
+            )
+        }
+        created = 0
+        for entry in entries:
+            existing = existing_by_date.get(entry.sales_date)
+            if existing:
+                existing.units_sold = entry.units_sold
+                existing.had_promotion = entry.had_promotion
+            else:
+                self._session.add(
+                    SalesHistory(
+                        product_id=product_id,
+                        sales_date=entry.sales_date,
+                        units_sold=entry.units_sold,
+                        had_promotion=entry.had_promotion,
+                    )
+                )
+                created += 1
+        self._session.commit()
+        return created, len(entries) - created
 
     def save_prediction(
         self,

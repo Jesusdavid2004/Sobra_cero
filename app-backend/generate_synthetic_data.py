@@ -4,7 +4,8 @@ import logging
 
 from sqlalchemy import select
 
-from app.db import Base, SessionLocal, engine
+from app.db import SessionLocal, engine
+from app.migrations import upgrade_database_schema
 from app.models import Product
 from app.synthetic_sales import DEFAULT_HISTORY_DAYS, generate_product_sales_history
 
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> None:
-    Base.metadata.create_all(bind=engine)
+    upgrade_database_schema(engine.url)
     with SessionLocal() as db:
         products = db.scalars(select(Product).order_by(Product.id)).all()
         if not products:

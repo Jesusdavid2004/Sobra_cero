@@ -1,35 +1,31 @@
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
-from alembic import command
-from alembic.config import Config
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
+from app.application.dto import DailySales
 from app.auth import current_user
 from app.config import settings
 from app.db import engine, get_db
-from app.dependencies import build_calculate_waste_risk_use_case
+from app.dependencies import (
+    build_calculate_waste_risk_use_case,
+    build_import_sales_history_csv_use_case,
+    build_sales_history_repository,
+)
 from app.domain.exceptions import (
     BatchAlreadyReservedError,
     InsufficientSalesHistoryError,
+    InvalidSalesHistoryCsvError,
     RefreshSessionStoreUnavailableError,
 )
-from app.models import (
-    Donation,
-    Lot,
-    Product,
-    Promotion,
-    Reservation,
-    SalesHistory,
-    Shop,
-    User,
-)
+from app.domain.rules import MAX_SALES_HISTORY_IMPORT_BYTES
+from app.migrations import upgrade_database_schema
+from app.models import Donation, Lot, Product, Promotion, Reservation, Shop, User
 from app.presentation.routers.auth import router as auth_router
 from app.schemas import (
     DonationCreate,
@@ -50,14 +46,7 @@ from app.storage import get_storage
 from app.synthetic_sales import DEFAULT_HISTORY_DAYS, generate_shop_sales_history
 from app.worker import generate_promotions_task
 
-backend_root = Path(__file__).resolve().parent.parent
-alembic_config = Config(str(backend_root / "alembic.ini"))
-alembic_config.set_main_option("script_location", str(backend_root / "migrations"))
-alembic_config.set_main_option(
-    "sqlalchemy.url",
-    engine.url.render_as_string(hide_password=False).replace("%", "%%"),
-)
-command.upgrade(alembic_config, "head")
+upgrade_database_schema(engine.url)
 app = FastAPI(title="SobraCero API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
@@ -82,6 +71,14 @@ def handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
 @app.exception_handler(RefreshSessionStoreUnavailableError)
 def handle_refresh_session_store_error(request: Request, exc: RefreshSessionStoreUnavailableError) -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": "Authentication service is unavailable"})
+
+
+@app.exception_handler(InvalidSalesHistoryCsvError)
+def handle_invalid_sales_history_csv(request: Request, exc: InvalidSalesHistoryCsvError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc), "code": "invalid_sales_history_csv"},
+    )
 
 
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
@@ -126,8 +123,11 @@ def create_shop(data: ShopCreate, db: Session = Depends(get_db), user: User = De
 
 
 @app.get("/api/v1/shops", response_model=list[ShopOut])
-def shops(db: Session = Depends(get_db)) -> list[Shop]:
-    return list(db.scalars(select(Shop)))
+def shops(db: Session = Depends(get_db), user: User = Depends(current_user)) -> list[Shop]:
+    query = select(Shop)
+    if not user.is_admin:
+        query = query.where(Shop.owner_id == user.id)
+    return list(db.scalars(query.order_by(Shop.id)))
 
 
 @app.post("/api/v1/shops/{shop_id}/products", response_model=ProductOut, status_code=201)
@@ -146,7 +146,14 @@ def create_product(
 
 
 @app.get("/api/v1/shops/{shop_id}/products", response_model=list[ProductOut])
-def shop_products(shop_id: int, db: Session = Depends(get_db)) -> list[Product]:
+def shop_products(
+    shop_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[Product]:
+    shop = db.get(Shop, shop_id)
+    if not shop or (shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Shop not found")
     return list(db.scalars(select(Product).where(Product.shop_id == shop_id)))
 
 
@@ -160,36 +167,56 @@ def add_sales_history(
     require_business(user)
     product = db.get(Product, product_id)
     shop = db.get(Shop, product.shop_id) if product else None
-    if not shop or shop.owner_id != user.id:
+    if not shop or (shop.owner_id != user.id and not user.is_admin):
         raise HTTPException(404, "Product not found")
     seen_dates = set()
-    created = 0
-    existing = 0
+    entries = []
     for entry in data.entries:
         if entry.sales_date in seen_dates:
             raise HTTPException(422, "Each sales date may only appear once per request")
         seen_dates.add(entry.sales_date)
-        row = db.scalar(
-            select(SalesHistory).where(
-                SalesHistory.product_id == product_id,
-                SalesHistory.sales_date == entry.sales_date,
+        entries.append(
+            DailySales(
+                sales_date=entry.sales_date,
+                units_sold=entry.units_sold,
+                had_promotion=entry.had_promotion,
             )
         )
-        if row:
-            row.units_sold = entry.units_sold
-            row.had_promotion = entry.had_promotion
-            existing += 1
-        else:
-            db.add(
-                SalesHistory(
-                    product_id=product_id,
-                    sales_date=entry.sales_date,
-                    units_sold=entry.units_sold,
-                    had_promotion=entry.had_promotion,
-                )
+    created, existing = build_sales_history_repository(db).upsert_many(
+        product_id,
+        [
+            DailySales(
+                sales_date=entry.sales_date,
+                units_sold=entry.units_sold,
+                had_promotion=entry.had_promotion,
             )
-            created += 1
-    db.commit()
+            for entry in entries
+        ],
+    )
+    return SalesHistoryCreated(created=created, existing=existing)
+
+
+@app.post(
+    "/api/v1/products/{product_id}/sales-history/csv",
+    response_model=SalesHistoryCreated,
+    status_code=201,
+    dependencies=[Depends(rate_limited(10, 60))],
+)
+async def import_sales_history_csv(
+    product_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> SalesHistoryCreated:
+    require_business(user)
+    product = db.get(Product, product_id)
+    shop = db.get(Shop, product.shop_id) if product else None
+    if not shop or (shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Product not found")
+    content = await file.read(MAX_SALES_HISTORY_IMPORT_BYTES + 1)
+    if len(content) > MAX_SALES_HISTORY_IMPORT_BYTES:
+        raise HTTPException(status_code=413, detail="Sales history CSV is too large")
+    created, existing = build_import_sales_history_csv_use_case(db).execute(product_id, content)
     return SalesHistoryCreated(created=created, existing=existing)
 
 
@@ -219,7 +246,7 @@ def shop_waste_risk(
 ) -> list[WasteRiskOut]:
     require_business(user)
     shop = db.get(Shop, shop_id)
-    if not shop or shop.owner_id != user.id:
+    if not shop or (shop.owner_id != user.id and not user.is_admin):
         raise HTTPException(404, "Shop not found")
     lots = db.scalars(select(Lot).where(Lot.shop_id == shop_id, Lot.quantity > 0).order_by(Lot.expires_at)).all()
     calculate_risk = build_calculate_waste_risk_use_case(db)

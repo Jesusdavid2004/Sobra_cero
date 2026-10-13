@@ -14,6 +14,7 @@ from app.application.use_cases.auth import (
     RegisterUser,
 )
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
+from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
 from app.auth import password_hasher
 from app.config import settings
 from app.db import get_db
@@ -73,7 +74,15 @@ def get_logout_session_use_case(
 
 def build_calculate_waste_risk_use_case(db: Session) -> CalculateWasteRiskUseCase:
     return CalculateWasteRiskUseCase(
-        repository=PostgresSalesHistoryRepository(db),
+        repository=build_sales_history_repository(db),
         prediction_model=WeightedMovingAveragePredictionModel(),
         ai_provider=build_client(),
     )
+
+
+def build_sales_history_repository(db: Session) -> PostgresSalesHistoryRepository:
+    return PostgresSalesHistoryRepository(db)
+
+
+def build_import_sales_history_csv_use_case(db: Session) -> ImportSalesHistoryCsv:
+    return ImportSalesHistoryCsv(repository=build_sales_history_repository(db))

@@ -13,6 +13,8 @@ from app.application.dto import (
 class SalesHistoryRepository(Protocol):
     def list_for_product(self, product_id: int, since: date) -> list[DailySales]: ...
 
+    def upsert_many(self, product_id: int, entries: Sequence[DailySales]) -> tuple[int, int]: ...
+
     def save_prediction(
         self,
         *,

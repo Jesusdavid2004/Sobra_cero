@@ -2,14 +2,14 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.auth import verify_password
-from app.db import Base
+from app.migrations import upgrade_database_schema
 from app.models import Lot, Product, Shop, User
 from seed_data import DEMO_EMAIL, DEMO_PASSWORD, LEGACY_DEMO_EMAIL, seed_demo_data
 
 
-def test_seed_is_idempotent_and_migrates_legacy_demo_email() -> None:
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
+def test_seed_is_idempotent_and_migrates_legacy_demo_email(tmp_path) -> None:
+    engine = create_engine(f"sqlite:///{tmp_path / 'seed.sqlite'}")
+    upgrade_database_schema(engine.url)
     session_factory = sessionmaker(bind=engine)
 
     with session_factory() as db:

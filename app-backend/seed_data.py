@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import hash_password
-from app.db import Base, SessionLocal, engine
+from app.db import SessionLocal, engine
+from app.migrations import upgrade_database_schema
 from app.models import Lot, Product, Shop, User
 
 DEMO_EMAIL = "demo@sobracero.com"
@@ -83,7 +84,7 @@ def seed_demo_data(db: Session) -> None:
 
 
 def main() -> None:
-    Base.metadata.create_all(bind=engine)
+    upgrade_database_schema(engine.url)
     with SessionLocal() as db:
         seed_demo_data(db)
     print(f"Seed complete: {DEMO_EMAIL} / {DEMO_PASSWORD}")

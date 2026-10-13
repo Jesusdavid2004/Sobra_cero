@@ -2,6 +2,10 @@ class InsufficientSalesHistoryError(Exception):
     """Raised when a product does not have enough daily sales to forecast waste."""
 
 
+class InvalidSalesHistoryCsvError(ValueError):
+    """Raised when a sales-history CSV does not match the supported import format."""
+
+
 class BatchAlreadyReservedError(Exception):
     """Raised when a customer attempts to reserve the same batch more than once."""
 
