@@ -4,6 +4,7 @@ from io import BytesIO
 from fastapi.testclient import TestClient
 from kombu.exceptions import OperationalError
 from PIL import Image
+from redis.exceptions import RedisError
 
 import app.main as main
 from app.db import Base, engine
@@ -71,6 +72,32 @@ def create_lot(
     )
     assert response.status_code == 201
     return response.json()["id"]
+
+
+def test_readiness_checks_database_and_redis(monkeypatch):
+    class ReadyRedis:
+        def ping(self):
+            return True
+
+    monkeypatch.setattr(main, "get_redis_client", lambda: ReadyRedis())
+
+    response = TestClient(main.app).get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+
+
+def test_readiness_returns_service_unavailable_when_redis_is_down(monkeypatch):
+    class UnavailableRedis:
+        def ping(self):
+            raise RedisError("redis unavailable")
+
+    monkeypatch.setattr(main, "get_redis_client", lambda: UnavailableRedis())
+
+    response = TestClient(main.app).get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Service dependencies are unavailable"
 
 
 def test_public_vitrine_and_reservation_flow():

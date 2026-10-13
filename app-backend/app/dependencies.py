@@ -41,14 +41,14 @@ from app.llm import build_client
 
 
 @lru_cache(maxsize=1)
-def _redis_client() -> Redis:
+def get_redis_client() -> Redis:
     return Redis.from_url(settings.redis_url, decode_responses=True)
 
 
 def get_session_manager() -> SessionManager:
     return JwtRedisSessionManager(
         secret=settings.jwt_secret,
-        token_store=RedisRefreshTokenStore(_redis_client()),
+        token_store=RedisRefreshTokenStore(get_redis_client()),
         access_token_minutes=settings.access_token_expire_minutes,
         refresh_token_days=settings.refresh_token_expire_days,
     )

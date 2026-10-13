@@ -10,7 +10,9 @@ from botocore.exceptions import BotoCoreError
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from kombu.exceptions import OperationalError
+from redis.exceptions import RedisError
 from sqlalchemy import func, select, update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
@@ -24,6 +26,7 @@ from app.dependencies import (
     build_import_sales_history_csv_use_case,
     build_sales_history_repository,
     build_train_sales_forecast_model_use_case,
+    get_redis_client,
 )
 from app.domain.exceptions import (
     AIProviderUnavailableError,
@@ -191,6 +194,17 @@ def require_business(user: User) -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness(db: Session = Depends(get_db)) -> dict[str, str]:
+    try:
+        db.execute(select(1))
+        if not get_redis_client().ping():
+            raise HTTPException(status_code=503, detail="Service dependencies are unavailable")
+    except (RedisError, SQLAlchemyError) as exc:
+        raise HTTPException(status_code=503, detail="Service dependencies are unavailable") from exc
+    return {"status": "ready"}
 
 
 @app.post("/api/v1/shops", response_model=ShopOut, status_code=201)

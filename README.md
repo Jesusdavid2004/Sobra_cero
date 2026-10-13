@@ -7,7 +7,7 @@ SobraCero is a food-rescue marketplace: shops publish lots close to expiry and n
 1. Copy `.env.example` to `.env` (secrets stay local, never committed).
 2. Run `docker compose up --build`.
 3. In another terminal run `docker compose exec backend python seed_data.py`.
-4. Open `http://localhost:3000` and API documentation at `http://localhost:8000/docs`.
+4. Open `http://localhost:3000/en` and API documentation at `http://localhost:8000/docs`.
 
 > Note: PostgreSQL is published on host port **5433** to avoid clashing with a local PostgreSQL service. The local S3 endpoint is `http://localhost:4566` (LocalStack).
 
@@ -15,9 +15,21 @@ The demo account is `demo@sobracero.com` with password `password123`. Do not use
 
 For a no-Docker backend test run, create a Python 3.12 virtual environment, install `app-backend/requirements.txt`, set `PYTHONPATH=app-backend`, and run `pytest app-backend/tests`. To verify the required application/domain coverage locally, run `pytest --cov=app.domain --cov=app.application --cov-fail-under=70 app-backend/tests` from `app-backend` with `PYTHONPATH=.`.
 
+## Environment variables
+
+Copy `.env.example` to `.env` for local development. The main settings are
+`DATABASE_URL` and `REDIS_URL` (database, sessions, and background jobs),
+`JWT_SECRET` and `REFRESH_COOKIE_SECURE` (authentication), `CORS_ORIGINS` and
+`NEXT_PUBLIC_API_URL` (browser/API connectivity), `MINIO_*` (private image
+storage), and `LLM_PROVIDER` plus the selected provider's API key (AI). The
+complete setting reference and production guidance are in
+[`docs/deployment.md`](docs/deployment.md). Example credentials are for local
+development only; never commit `.env`.
+
 ## MVP endpoints
 
 - `POST /api/v1/auth/register`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`
 - `GET/POST /api/v1/shops`, `GET/POST /api/v1/shops/{id}/products`
 - `GET/POST /api/v1/lots`, `GET /api/v1/lots/{id}`, `POST /api/v1/lots/{id}/image`
 - `POST /api/v1/lots/{id}/reserve`, `POST /api/v1/lots/{id}/donate`
@@ -26,6 +38,7 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
 - `POST/GET /api/v1/lots/{id}/expiry-scans`, `POST /api/v1/lots/{id}/expiry-scans/{suggestion_id}/confirm|reject`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
+- `GET /health` (liveness), `GET /ready` (PostgreSQL and Redis readiness)
 - `POST /api/v1/admin/models/sales-forecast/train` (admin only)
 - `POST /api/v1/products/{id}/sales-history/csv` (business owner/admin; CSV columns: `sales_date,units_sold,had_promotion`)
 
@@ -73,16 +86,24 @@ validated active model, the API explicitly reports
 the existing predictor. Training considers at most the latest 365 days and
 requires enough continuous history for both training and evaluation windows.
 
-## Connected flow (v0.2.0)
+## Product flow
 
 The full demo flow is wired end-to-end:
 
-1. Register/login from the UI (`/login`, `/register`) → short-lived access token kept in memory and a rotating refresh token in an HttpOnly cookie.
-2. Dashboard `/shop`: create shops and products.
-3. `/lots/new`: publish a lot (image optional, compressed on the client via canvas and stored in **S3-compatible storage** via LocalStack).
-4. Vitrine `/`: lots appear with price, discount and expiry; reserve directly or open `/lots/{id}`.
-5. `/lots/{id}`: reserve a quantity (atomic, reduces stock) and generate **3 promo variants**.
-6. `/admin`: platform counts and a 7-day forecast.
+1. Register/login from the locale-prefixed UI (`/en/login`, `/en/register`) →
+   short-lived access token kept in memory and a rotating refresh token in an
+   HttpOnly cookie.
+2. Business dashboard `/en/shop`: create shops/products, review forecasts, and
+   confirm customer pickups.
+3. `/en/lots/new`: publish a lot (image optional, compressed on the client and
+   stored in private **S3-compatible storage**).
+4. Public storefront `/en/lots`: browse available lots and open `/en/lots/{id}`.
+5. A customer reserves a quantity (atomic stock update) and receives a
+   reservation reference and pickup code. The owning business confirms pickup
+   from its dashboard.
+6. Lot owners can generate **3 promo variants** and request an expiry-date
+   suggestion from an uploaded image. Suggestions require explicit
+   confirmation. `/en/admin` contains platform counts and model training.
 
 Promo generation runs as a **Celery/Redis** job when available and falls back to an in-process run otherwise. The exact prompt used per variant is persisted for auditability.
 
@@ -114,15 +135,41 @@ metadata before private storage or provider use.
 ## Quality and scope notes
 
 - CI runs backend tests with at least 70% coverage for domain/application, plus `black`, `isort`, `flake8` and `mypy`; the frontend runs `eslint`, `prettier` and `next build`.
-- In-memory sliding-window rate limits protect reservations, image uploads and promo generation.
+- In-memory sliding-window rate limits protect reservations, image uploads, promo generation, expiry scans, model training, and pickup confirmation. These limits are per-process and must be supplemented by a distributed edge limiter in a multi-replica production deployment.
 - Reservations atomically consume lot stock; customers can cancel active reservations and the owning shop can confirm pickup with its code. Celery Beat expires lots and their outstanding reservations every minute (`docker compose up scheduler`).
 - Alembic is the source of truth for the database schema. The API and both backend data scripts apply pending migrations before accessing the database.
 - Images are validated by their actual JPEG/PNG/WebP signatures, limited to 5 MiB, stored under random private keys and served with short-lived signed URLs. The adapter is backed by **LocalStack** in Docker. Set `MINIO_ENDPOINT`/`MINIO_PUBLIC_URL` to point at any S3-compatible service (MinIO, AWS S3, LocalStack...).
 
 ## Demo flow
 
-Register a user from the UI, create a shop and product, publish a lot expiring within 48 hours (add a photo), open the vitrine, reserve a quantity, and generate promos from the lot detail page. Start the Celery worker and scheduler with `docker compose up worker scheduler` to process promo jobs and lot expiration asynchronously.
+Register a user from the UI, create a shop and product, publish a lot expiring
+within 48 hours (add a photo), reserve as a customer, then log in as the
+business and confirm pickup using the displayed reference and code. Start the
+Celery worker and scheduler with `docker compose up worker scheduler` to
+process promo jobs and lot expiration asynchronously.
+
+## Project documentation
+
+- [Architecture and data model](docs/architecture.md)
+- [API guide](docs/api.md)
+- [Model and AI evaluation](docs/evaluation.md)
+- [Security notes and release checklist](docs/security.md)
+- [Deployment and operations](docs/deployment.md)
+- [Live demo script](docs/demo-script.md)
+- [Architecture decision records](docs/adr/)
+
+There is no public production deployment or committed product screenshot yet.
+See the release checklist in [`docs/security.md`](docs/security.md) before
+publishing.
 
 ### Resumen en español
 
-SobraCero conecta comercios con personas que quieren rescatar alimentos próximos a vencer. Las cuentas de comercio pueden cargar 60 días de ventas de ejemplo y consultar una estimación explicable del riesgo de desperdicio por lote; esos datos solo son visibles para el comercio propietario. Las cuentas de cliente pueden reservar lotes y reciben un código único para recogerlos. El OCR de fechas y las cuentas para bancos de alimentos todavía no están implementados.
+SobraCero conecta comercios con personas que quieren rescatar alimentos
+próximos a vencer. Las cuentas de comercio pueden cargar 60 días de ventas de
+ejemplo y consultar una estimación explicable del riesgo de desperdicio por
+lote; esos datos solo son visibles para el comercio propietario. Las cuentas
+de cliente pueden reservar lotes y reciben una referencia y un código único
+para recogerlos; el comercio confirma la recogida. El OCR propone fechas de
+vencimiento a partir de una foto, pero siempre requiere confirmación humana.
+Las cuentas para bancos de alimentos todavía no están implementadas. No hay
+despliegue público de producción verificado.

@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+- Added an API readiness endpoint that checks PostgreSQL and Redis separately
+  from the liveness endpoint.
+- Added business-dashboard confirmation for customer pickups using the
+  reservation reference and pickup code, with an IP rate limit and
+  cross-role/ownership coverage.
+- Added an end-to-end browser test for publishing, reserving, and confirming a
+  pickup, including locale and theme changes.
+- Documented system architecture, API contracts, model/AI evaluation,
+  deployment operations, security controls, and the live demo.
+
 ## [0.2.1] - 2026-09-29
 
 - Replaced the archived MinIO container with LocalStack as the S3-compatible storage (MinIO open-source was discontinued upstream).
