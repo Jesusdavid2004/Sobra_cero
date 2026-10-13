@@ -7,6 +7,7 @@ from app.application.dto import DailySales, PredictionEstimate
 from app.application.ports import PredictionModel
 from app.domain.services.waste_risk import calculate_waste_risk
 
+MODEL_VERSION = "baseline-weighted-moving-average"
 RECENT_WINDOW_DAYS = 14
 TREND_WINDOW_DAYS = 7
 RECENT_WEIGHT = 0.65
@@ -56,6 +57,7 @@ class WeightedMovingAveragePredictionModel(PredictionModel):
             expected_sales=round(assessment.expected_sales, 2),
             units_at_risk=round(assessment.units_at_risk, 2),
             risk_score=assessment.risk_score,
+            model_version=MODEL_VERSION,
         )
 
     @staticmethod

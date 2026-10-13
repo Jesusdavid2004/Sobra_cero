@@ -20,6 +20,7 @@ class PredictionEstimate:
     expected_sales: float
     units_at_risk: float
     risk_score: RiskScore
+    model_version: str = "baseline-weighted-moving-average"
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,33 @@ class WasteRiskResult:
     units_at_risk: float
     risk_score: RiskScore
     recommendation: str
+    model_version: str = "baseline-weighted-moving-average"
+
+
+@dataclass(frozen=True)
+class SalesForecastModelArtifact:
+    version: str
+    weekday_factors: tuple[float, ...]
+    trained_until: date
+
+
+@dataclass(frozen=True)
+class SalesForecastEvaluation:
+    artifact: SalesForecastModelArtifact
+    training_samples: int
+    evaluation_samples: int
+    baseline_mae: float
+    model_mae: float
+
+
+@dataclass(frozen=True)
+class SalesForecastTrainingResult:
+    version: str
+    training_samples: int
+    evaluation_samples: int
+    baseline_mae: float
+    model_mae: float
+    activated: bool
 
 
 @dataclass(frozen=True)

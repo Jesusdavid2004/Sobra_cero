@@ -15,6 +15,7 @@ from app.application.use_cases.auth import (
 )
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
+from app.application.use_cases.train_sales_forecast_model import TrainSalesForecastModel
 from app.auth import password_hasher
 from app.config import settings
 from app.db import get_db
@@ -22,8 +23,15 @@ from app.infrastructure.auth.refresh_sessions import (
     JwtRedisSessionManager,
     RedisRefreshTokenStore,
 )
+from app.infrastructure.prediction.weekday_sales_forecast import (
+    WeekdaySalesForecastModel,
+    WeekdaySalesForecastTrainer,
+)
 from app.infrastructure.prediction.weighted_moving_average import (
     WeightedMovingAveragePredictionModel,
+)
+from app.infrastructure.repositories.sales_forecast_model_repository import (
+    SqlAlchemySalesForecastModelRepository,
 )
 from app.infrastructure.repositories.sales_history_repository import (
     PostgresSalesHistoryRepository,
@@ -73,9 +81,13 @@ def get_logout_session_use_case(
 
 
 def build_calculate_waste_risk_use_case(db: Session) -> CalculateWasteRiskUseCase:
+    model_repository = build_sales_forecast_model_repository(db)
+    artifact = model_repository.get_active_model()
     return CalculateWasteRiskUseCase(
         repository=build_sales_history_repository(db),
-        prediction_model=WeightedMovingAveragePredictionModel(),
+        prediction_model=(
+            WeekdaySalesForecastModel(artifact) if artifact is not None else WeightedMovingAveragePredictionModel()
+        ),
         ai_provider=build_client(),
     )
 
@@ -86,3 +98,14 @@ def build_sales_history_repository(db: Session) -> PostgresSalesHistoryRepositor
 
 def build_import_sales_history_csv_use_case(db: Session) -> ImportSalesHistoryCsv:
     return ImportSalesHistoryCsv(repository=build_sales_history_repository(db))
+
+
+def build_sales_forecast_model_repository(db: Session) -> SqlAlchemySalesForecastModelRepository:
+    return SqlAlchemySalesForecastModelRepository(db)
+
+
+def build_train_sales_forecast_model_use_case(db: Session) -> TrainSalesForecastModel:
+    return TrainSalesForecastModel(
+        repository=build_sales_forecast_model_repository(db),
+        trainer=WeekdaySalesForecastTrainer(),
+    )

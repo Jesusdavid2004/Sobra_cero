@@ -16,10 +16,12 @@ from app.dependencies import (
     build_calculate_waste_risk_use_case,
     build_import_sales_history_csv_use_case,
     build_sales_history_repository,
+    build_train_sales_forecast_model_use_case,
 )
 from app.domain.exceptions import (
     BatchAlreadyReservedError,
     InsufficientSalesHistoryError,
+    InsufficientSalesTrainingDataError,
     InvalidSalesHistoryCsvError,
     RefreshSessionStoreUnavailableError,
 )
@@ -35,6 +37,7 @@ from app.schemas import (
     ProductOut,
     PromotionOut,
     ReservationCreate,
+    SalesForecastTrainingOut,
     SalesHistoryCreate,
     SalesHistoryCreated,
     ShopCreate,
@@ -81,7 +84,16 @@ def handle_invalid_sales_history_csv(request: Request, exc: InvalidSalesHistoryC
     )
 
 
+@app.exception_handler(InsufficientSalesTrainingDataError)
+def handle_insufficient_sales_training_data(request: Request, exc: InsufficientSalesTrainingDataError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={"detail": str(exc), "code": "insufficient_sales_training_data"},
+    )
+
+
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
+MODEL_TRAINING_REQUESTS_PER_MINUTE = 2
 
 
 def rate_limited(limit: int, window_seconds: int = 60):
@@ -281,6 +293,7 @@ def shop_waste_risk(
                 risk_level=result.risk_score.level,
                 recommendation=result.recommendation,
                 calculated_at=datetime.now(timezone.utc),
+                prediction_model=result.model_version,
             )
         )
     return results
@@ -391,6 +404,27 @@ def reserve(
         "quantity": reservation.quantity,
         "pickup_code": reservation.pickup_code,
     }
+
+
+@app.post(
+    "/api/v1/admin/models/sales-forecast/train",
+    response_model=SalesForecastTrainingOut,
+    dependencies=[Depends(rate_limited(MODEL_TRAINING_REQUESTS_PER_MINUTE, 60))],
+)
+def train_sales_forecast_model(
+    db: Session = Depends(get_db), user: User = Depends(current_user)
+) -> SalesForecastTrainingOut:
+    if not user.is_admin:
+        raise HTTPException(403, "Admin access required")
+    result = build_train_sales_forecast_model_use_case(db).execute()
+    return SalesForecastTrainingOut(
+        model_version=result.version,
+        training_samples=result.training_samples,
+        evaluation_samples=result.evaluation_samples,
+        baseline_mae=result.baseline_mae,
+        model_mae=result.model_mae,
+        activated=result.activated,
+    )
 
 
 @app.post("/api/v1/lots/{lot_id}/donate", status_code=201)

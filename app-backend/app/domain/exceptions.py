@@ -2,6 +2,10 @@ class InsufficientSalesHistoryError(Exception):
     """Raised when a product does not have enough daily sales to forecast waste."""
 
 
+class InsufficientSalesTrainingDataError(Exception):
+    """Raised when sales history cannot support a time-based model evaluation."""
+
+
 class InvalidSalesHistoryCsvError(ValueError):
     """Raised when a sales-history CSV does not match the supported import format."""
 

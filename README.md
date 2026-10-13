@@ -23,6 +23,7 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 - `POST /api/v1/lots/{id}/reserve`, `POST /api/v1/lots/{id}/donate`
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
+- `POST /api/v1/admin/models/sales-forecast/train` (admin only)
 - `POST /api/v1/products/{id}/sales-history/csv` (business owner/admin; CSV columns: `sales_date,units_sold,had_promotion`)
 
 The public listing supports `expires_in`, `min_discount`, `category`, `business_type`, and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
@@ -58,6 +59,16 @@ Business owners can also import sales history from a UTF-8 CSV with the columns
 90 data rows; a repeated product/date is updated, while invalid files are
 rejected without partially importing rows. Sales history is private to the
 product's shop owner and platform admins.
+
+Waste-risk predictions use the active trained weekday-seasonal sales model when
+an admin-trained candidate beats the moving-average baseline on a chronological
+holdout. Training is available at
+`POST /api/v1/admin/models/sales-forecast/train`; artifacts, evaluation metrics,
+and the active-model pointer are stored in the database. When there is no
+validated active model, the API explicitly reports
+`baseline-weighted-moving-average` as `prediction_model` and continues using
+the existing predictor. Training considers at most the latest 365 days and
+requires enough continuous history for both training and evaluation windows.
 
 ## Connected flow (v0.2.0)
 

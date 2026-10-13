@@ -69,6 +69,7 @@ class PostgresSalesHistoryRepository(SalesHistoryRepository):
         units_at_risk: float,
         expected_sales: float,
         recommendation: str,
+        model_version: str,
     ) -> None:
         prediction = WastePrediction(
             product_id=product_id,
@@ -77,6 +78,7 @@ class PostgresSalesHistoryRepository(SalesHistoryRepository):
             units_at_risk=units_at_risk,
             expected_sales=expected_sales,
             recommendation=recommendation,
+            model_version=model_version,
         )
         self._session.add(prediction)
         self._session.commit()

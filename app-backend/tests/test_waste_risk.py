@@ -10,13 +10,18 @@ from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUse
 from app.db import Base, SessionLocal, engine
 from app.domain.exceptions import (
     InsufficientSalesHistoryError,
+    InsufficientSalesTrainingDataError,
     RiskScoreValidationError,
 )
 from app.domain.value_objects import RiskScore
+from app.infrastructure.prediction.weekday_sales_forecast import (
+    WeekdaySalesForecastModel,
+    WeekdaySalesForecastTrainer,
+)
 from app.infrastructure.prediction.weighted_moving_average import (
     WeightedMovingAveragePredictionModel,
 )
-from app.models import SalesHistory
+from app.models import SalesForecastModel, SalesHistory, User, WastePrediction
 
 
 def reset_db() -> None:
@@ -81,6 +86,36 @@ def test_weighted_moving_average_accounts_for_weekdays_and_risk():
     assert result.expected_sales == 6
     assert result.units_at_risk == 14
     assert result.risk_score == RiskScore(70)
+    assert result.model_version == "baseline-weighted-moving-average"
+
+
+def test_weekday_model_is_trained_and_evaluated_on_a_later_time_window():
+    start = date(2026, 7, 1)
+    weekday_units = (4, 6, 8, 10, 12, 20, 24)
+    history = [
+        DailySales(start + timedelta(days=offset), weekday_units[(start + timedelta(days=offset)).weekday()], False)
+        for offset in range(70)
+    ]
+
+    evaluation = WeekdaySalesForecastTrainer().train([history])
+    prediction = WeekdaySalesForecastModel(evaluation.artifact).predict(
+        history,
+        current_stock=100,
+        days_remaining=7,
+        today=history[-1].sales_date,
+    )
+
+    assert evaluation.training_samples >= 14
+    assert evaluation.evaluation_samples >= 7
+    assert evaluation.artifact.trained_until < history[-1].sales_date
+    assert evaluation.model_mae < evaluation.baseline_mae
+    assert prediction.model_version == evaluation.artifact.version
+    assert prediction.expected_sales == 84
+
+
+def test_weekday_model_requires_a_chronological_holdout():
+    with pytest.raises(InsufficientSalesTrainingDataError):
+        WeekdaySalesForecastTrainer().train([[]])
 
 
 def test_calculate_use_case_requires_history_before_model_call():
@@ -162,6 +197,7 @@ def test_calculate_use_case_persists_prediction_and_returns_result():
         "units_at_risk": 4.0,
         "expected_sales": 6.0,
         "recommendation": "Publish with a 30% discount.",
+        "model_version": "baseline-weighted-moving-average",
     }
 
 
@@ -181,11 +217,56 @@ def test_business_can_generate_sample_data_and_calculate_spanish_risk():
     assert prediction["data_points"] == 60
     assert 0 <= prediction["risk_score"] <= 100
     assert prediction["risk_level"] in {"low", "medium", "high"}
+    assert prediction["prediction_model"] == "baseline-weighted-moving-average"
     assert "descuento" in prediction["recommendation"].lower()
     assert prediction["calculated_at"]
     public_lot = client.get(f"/api/v1/lots/{lot_id}").json()
     assert "sales_history" not in public_lot
     assert "recommendation" not in public_lot
+
+
+def test_admin_trains_and_activates_model_only_after_baseline_improvement():
+    reset_db()
+    client = TestClient(main.app)
+    headers = create_business(client, "model-admin@example.com")
+    shop_id, product_id, _ = create_product_and_lot(client, headers)
+    assert client.post("/api/v1/admin/models/sales-forecast/train", headers=headers).status_code == 403
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == "model-admin@example.com"))
+        assert user is not None
+        user.is_admin = True
+        start = date.today() - timedelta(days=70)
+        weekday_units = (4, 6, 8, 10, 12, 20, 24)
+        db.add_all(
+            [
+                SalesHistory(
+                    product_id=product_id,
+                    sales_date=start + timedelta(days=offset),
+                    units_sold=weekday_units[(start + timedelta(days=offset)).weekday()],
+                    had_promotion=False,
+                )
+                for offset in range(70)
+            ]
+        )
+        db.commit()
+
+    training = client.post("/api/v1/admin/models/sales-forecast/train", headers=headers)
+    risk_response = client.get(f"/api/v1/shops/{shop_id}/waste-risk", headers=headers)
+
+    assert training.status_code == 200
+    assert training.json()["activated"] is True
+    assert training.json()["model_mae"] < training.json()["baseline_mae"]
+    assert risk_response.status_code == 200
+    assert risk_response.json()[0]["prediction_model"] == training.json()["model_version"]
+    with SessionLocal() as db:
+        model = db.scalar(select(SalesForecastModel).where(SalesForecastModel.status == "active"))
+        assert model is not None
+        assert model.version == training.json()["model_version"]
+        prediction = db.scalar(
+            select(WastePrediction).where(WastePrediction.lot_id == risk_response.json()[0]["lot_id"])
+        )
+        assert prediction is not None
+        assert prediction.model_version == training.json()["model_version"]
     assert client.post(f"/api/v1/products/{product_id}/sales-history", json={"entries": []}).status_code == 401
 
 

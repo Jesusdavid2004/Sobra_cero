@@ -130,3 +130,13 @@ class WasteRiskOut(BaseModel):
     risk_level: Literal["low", "medium", "high"]
     recommendation: str
     calculated_at: datetime
+    prediction_model: str
+
+
+class SalesForecastTrainingOut(BaseModel):
+    model_version: str
+    training_samples: int
+    evaluation_samples: int
+    baseline_mae: float
+    model_mae: float
+    activated: bool

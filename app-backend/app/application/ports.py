@@ -5,6 +5,8 @@ from app.application.dto import (
     AuthUser,
     DailySales,
     PredictionEstimate,
+    SalesForecastEvaluation,
+    SalesForecastModelArtifact,
     SessionTokens,
     UserRole,
 )
@@ -24,6 +26,7 @@ class SalesHistoryRepository(Protocol):
         units_at_risk: float,
         expected_sales: float,
         recommendation: str,
+        model_version: str,
     ) -> None: ...
 
 
@@ -35,6 +38,18 @@ class PredictionModel(Protocol):
         days_remaining: int,
         today: date,
     ) -> PredictionEstimate: ...
+
+
+class SalesForecastTrainer(Protocol):
+    def train(self, histories: Sequence[Sequence[DailySales]]) -> SalesForecastEvaluation: ...
+
+
+class SalesForecastModelRepository(Protocol):
+    def list_training_history(self) -> list[list[DailySales]]: ...
+
+    def get_active_model(self) -> SalesForecastModelArtifact | None: ...
+
+    def save_evaluation(self, evaluation: SalesForecastEvaluation, *, activate: bool) -> None: ...
 
 
 class AIProvider(Protocol):

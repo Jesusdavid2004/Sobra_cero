@@ -68,6 +68,7 @@ class CalculateWasteRiskUseCase:
             units_at_risk=estimate.units_at_risk,
             expected_sales=estimate.expected_sales,
             recommendation=recommendation,
+            model_version=estimate.model_version,
         )
         return WasteRiskResult(
             product_id=product_id,
@@ -81,4 +82,5 @@ class CalculateWasteRiskUseCase:
             units_at_risk=estimate.units_at_risk,
             risk_score=estimate.risk_score,
             recommendation=recommendation,
+            model_version=estimate.model_version,
         )

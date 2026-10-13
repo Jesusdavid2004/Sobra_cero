@@ -135,4 +135,20 @@ class WastePrediction(Base):
     units_at_risk: Mapped[float] = mapped_column(Float)
     expected_sales: Mapped[float] = mapped_column(Float)
     recommendation: Mapped[str] = mapped_column(Text)
+    model_version: Mapped[str] = mapped_column(String(100), default="legacy", server_default="legacy")
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class SalesForecastModel(Base):
+    __tablename__ = "sales_forecast_models"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version: Mapped[str] = mapped_column(String(100), unique=True)
+    artifact_json: Mapped[str] = mapped_column(Text)
+    training_samples: Mapped[int] = mapped_column(Integer)
+    evaluation_samples: Mapped[int] = mapped_column(Integer)
+    baseline_mae: Mapped[float] = mapped_column(Float)
+    model_mae: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    active_slot: Mapped[str | None] = mapped_column(String(10), unique=True, nullable=True)
+    trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)

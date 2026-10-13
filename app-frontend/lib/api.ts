@@ -62,6 +62,7 @@ export type WasteRisk = {
   risk_score: number;
   risk_level: "low" | "medium" | "high";
   recommendation: string;
+  prediction_model: string;
   calculated_at: string;
 };
 export type SalesHistoryCreated = { created: number; existing: number };
