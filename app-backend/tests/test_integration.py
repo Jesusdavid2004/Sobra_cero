@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from io import BytesIO
 
 from fastapi.testclient import TestClient
+from kombu.exceptions import OperationalError
+from PIL import Image
 
 import app.main as main
 from app.db import Base, engine
@@ -174,7 +177,7 @@ def test_promos_generate_with_mock_client(monkeypatch):
     lot_id = create_lot(client, headers)
 
     def raise_(self=None, *args, **kwargs):
-        raise RuntimeError("no broker in tests")
+        raise OperationalError("no broker in tests")
 
     monkeypatch.setattr(main, "generate_promotions_task", type("Task", (), {"delay": raise_})())
 
@@ -214,9 +217,11 @@ def test_image_upload_uses_random_private_key_and_signed_url(monkeypatch):
             return f"https://images.example/{key}?signature=short-lived"
 
     monkeypatch.setattr(main, "get_storage", lambda: StorageStub())
+    image_buffer = BytesIO()
+    Image.new("RGB", (2, 2), "white").save(image_buffer, format="PNG")
     response = client.post(
         f"/api/v1/lots/{lot_id}/image",
-        files={"image": ("../../private.png", b"\x89PNG\r\n\x1a\nvalid-test-data", "image/png")},
+        files={"image": ("../../private.png", image_buffer.getvalue(), "image/png")},
         headers=headers,
     )
 

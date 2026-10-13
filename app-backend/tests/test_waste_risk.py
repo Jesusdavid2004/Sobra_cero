@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 import app.main as main
+from app.application.ai_dto import RiskAdvice
 from app.application.dto import DailySales, PredictionEstimate
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
 from app.db import Base, SessionLocal, engine
@@ -169,10 +170,11 @@ def test_calculate_use_case_persists_prediction_and_returns_result():
             return PredictionEstimate(3.0, 6.0, 4.0, RiskScore(40))
 
     class RecordingAI:
-        def complete(self, prompt):
-            assert "40/100" in prompt
-            assert "Respond in English" in prompt
-            return "Publish with a 30% discount."
+        def generate_structured(self, **kwargs):
+            assert "&quot;risk_score&quot;: 40" in kwargs["prompt"]
+            assert "English" in kwargs["prompt"]
+            assert kwargs["response_model"] is RiskAdvice
+            return RiskAdvice(text="Review the offer to reduce potential food waste.")
 
     repository = RecordingRepository()
     use_case = CalculateWasteRiskUseCase(repository, PredictingModel(), RecordingAI())
@@ -196,7 +198,7 @@ def test_calculate_use_case_persists_prediction_and_returns_result():
         "risk_score": 40,
         "units_at_risk": 4.0,
         "expected_sales": 6.0,
-        "recommendation": "Publish with a 30% discount.",
+        "recommendation": "Review the offer to reduce potential food waste.",
         "model_version": "baseline-weighted-moving-average",
     }
 

@@ -24,6 +24,7 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 - `POST /api/v1/lots/{id}/cancel`
 - `POST /api/v1/reservations/{id}/cancel`, `POST /api/v1/reservations/{id}/pickup`
 - `POST /api/v1/lots/{id}/generate-promos`, `GET /api/v1/lots/{id}/promos`
+- `POST/GET /api/v1/lots/{id}/expiry-scans`, `POST /api/v1/lots/{id}/expiry-scans/{suggestion_id}/confirm|reject`
 - `GET /api/v1/shops/{id}/forecast`, `GET /api/v1/admin/report`
 - `POST /api/v1/admin/models/sales-forecast/train` (admin only)
 - `POST /api/v1/products/{id}/sales-history/csv` (business owner/admin; CSV columns: `sales_date,units_sold,had_promotion`)
@@ -85,19 +86,30 @@ The full demo flow is wired end-to-end:
 
 Promo generation runs as a **Celery/Redis** job when available and falls back to an in-process run otherwise. The exact prompt used per variant is persisted for auditability.
 
-## LLM provider (free options)
+## Structured AI and expiry-date scanning
 
-The promo generator uses an abstract client (`app/llm.py`) selected by `LLM_PROVIDER`:
+Promotions, qualitative waste-risk advice, and image-based expiry-date suggestions
+use schema-validated responses from the provider selected by `LLM_PROVIDER`.
+Supported values are `mock`, `anthropic`, `openai`, `ollama`, `groq`, and
+`openrouter`. The mock provider is deterministic and intended for development
+and tests; production requires a configured remote provider.
 
-| Provider | Setup | Cost |
-|---|---|---|
-| `mock` (default) | Nothing — deterministic texts | $0 |
-| `ollama` | `LLM_BASE_URL=http://localhost:11434/v1`, `LLM_MODEL=llama3.1` (install Ollama) | $0, local |
-| `groq` | Free account → API key, `LLM_BASE_URL=https://api.groq.com/openai/v1` | $0 |
-| `openrouter` | Free account → use `:free` models | $0 |
-| `openai` | API key from platform.openai.com (paid) | paid |
+Configure `ANTHROPIC_API_KEY` for Anthropic or `OPENAI_API_KEY` (or
+`LLM_API_KEY`) for OpenAI. OpenAI-compatible providers use `LLM_BASE_URL`,
+`LLM_MODEL`, and optionally `LLM_API_KEY`. `AI_MODEL_FAST` and `AI_MODEL_SMART`
+select Anthropic models. `AI_MAX_TOKENS`, `AI_TIMEOUT_SECONDS`,
+`AI_DAILY_QUOTA`, and `AI_CACHE_TTL_SECONDS` control response size, timeout,
+per-user daily request allowance, and private response-cache duration.
 
-Any OpenAI-compatible endpoint works by setting `LLM_BASE_URL` and `LLM_MODEL`. No key is required for `mock` or `ollama`.
+Expiry-date scans require a lot image and are available only to the lot's shop
+owner (or an admin). A scan is stored as `awaiting_confirmation` only when a
+date is present and meets the configured confidence threshold; otherwise it is
+`unreadable`. The suggested date never changes the lot automatically. The
+business must explicitly confirm or reject it. Scans send the private image to
+the configured AI provider; review its data-processing terms before enabling a
+remote provider. Uploads accept static JPEG, PNG, and WebP images, enforce file
+and pixel limits, apply EXIF orientation, and re-encode the image to remove
+metadata before private storage or provider use.
 
 ## Quality and scope notes
 

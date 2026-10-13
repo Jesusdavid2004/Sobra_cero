@@ -56,3 +56,19 @@ class InvalidRefreshTokenError(Exception):
 
 class RefreshSessionStoreUnavailableError(Exception):
     """Raised when the session store cannot safely rotate or revoke a token."""
+
+
+class AIResponseInvalidError(Exception):
+    """Raised when an AI provider cannot produce output matching the requested schema."""
+
+
+class AIProviderUnavailableError(Exception):
+    """Raised when an AI provider or its request-policy store is unavailable."""
+
+
+class AIQuotaExceededError(Exception):
+    """Raised when a user exceeds the daily AI request allowance."""
+
+
+class InvalidImageError(ValueError):
+    """Raised when an uploaded image is corrupt or outside supported image limits."""

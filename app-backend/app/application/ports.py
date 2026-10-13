@@ -1,5 +1,7 @@
 from datetime import date
-from typing import Protocol, Sequence
+from typing import Protocol, Sequence, TypeVar
+
+from pydantic import BaseModel
 
 from app.application.dto import (
     AuthUser,
@@ -52,8 +54,22 @@ class SalesForecastModelRepository(Protocol):
     def save_evaluation(self, evaluation: SalesForecastEvaluation, *, activate: bool) -> None: ...
 
 
+AIOutput = TypeVar("AIOutput", bound=BaseModel)
+
+
 class AIProvider(Protocol):
-    def complete(self, prompt: str) -> str: ...
+    def generate_structured(
+        self,
+        *,
+        prompt: str,
+        response_model: type[AIOutput],
+        user_id: int,
+        locale: str,
+        prompt_version: str,
+        image_data: bytes | None = None,
+        image_mime_type: str | None = None,
+        model_tier: str = "fast",
+    ) -> AIOutput: ...
 
 
 class AuthUserRepository(Protocol):

@@ -105,6 +105,15 @@ class PickupConfirmation(BaseModel):
     pickup_code: str = Field(min_length=8, max_length=8, pattern="^[A-F0-9]{8}$")
 
 
+class ExpiryScanSuggestionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    printed_date: str | None
+    expires_on: date | None
+    confidence: float = Field(ge=0, le=1)
+    status: Literal["awaiting_confirmation", "confirmed", "rejected", "unreadable"]
+
+
 class PromotionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

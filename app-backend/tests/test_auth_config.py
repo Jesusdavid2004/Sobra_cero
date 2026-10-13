@@ -22,6 +22,8 @@ def test_production_auth_configuration_requires_a_strong_secret_and_secure_cooki
         app_environment="production",
         jwt_secret="production-secret-that-is-at-least-32-characters",
         refresh_cookie_secure=True,
+        llm_provider="anthropic",
+        anthropic_api_key="test-api-key",
     )
 
 

@@ -12,7 +12,7 @@ celery_app.conf.beat_schedule = {
 
 
 @celery_app.task
-def generate_promotions_task(lot_id: int, language: str = "en") -> int:
+def generate_promotions_task(lot_id: int, user_id: int, language: str = "en") -> int:
     from app.db import SessionLocal
     from app.models import Lot
     from app.services import build_promotions
@@ -22,7 +22,7 @@ def generate_promotions_task(lot_id: int, language: str = "en") -> int:
         lot = db.get(Lot, lot_id)
         if not lot:
             return 0
-        promotions = build_promotions(db, lot, language)
+        promotions = build_promotions(db, lot, language, user_id=user_id)
         return len(promotions)
     finally:
         db.close()

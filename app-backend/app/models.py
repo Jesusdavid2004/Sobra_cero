@@ -121,6 +121,26 @@ class Reservation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
+class ExpiryScanSuggestion(Base):
+    __tablename__ = "expiry_scan_suggestions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('awaiting_confirmation', 'confirmed', 'rejected', 'unreadable')",
+            name="ck_expiry_scan_suggestions_status",
+        ),
+        Index("ix_expiry_scan_suggestions_lot_id", "lot_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    printed_date: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    expires_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float)
+    status: Mapped[str] = mapped_column(String(30), default="unreadable", server_default="unreadable")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 class Donation(Base):
     __tablename__ = "donations"
     id: Mapped[int] = mapped_column(primary_key=True)

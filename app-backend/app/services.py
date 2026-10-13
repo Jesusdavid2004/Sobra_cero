@@ -6,11 +6,13 @@ from sqlalchemy import case, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.application.ai_dto import PromotionCopy
+from app.application.ports import AIProvider
 from app.domain.entities import BatchStatus, ReservationStatus
 from app.domain.exceptions import BatchAlreadyReservedError
 from app.llm import build_client
 from app.models import Donation, Lot, Promotion, Reservation
-from app.prompts import VARIANTS, build_prompt
+from app.prompts import PROMOTION_PROMPT_VERSION, VARIANTS, build_prompt
 
 
 def reserve_lot(db: Session, lot_id: int, user_id: int, quantity: int) -> Reservation:
@@ -239,15 +241,28 @@ def expire_due_lots(db: Session, now: datetime | None = None) -> int:
     return max(expired_lots.rowcount or 0, 0)
 
 
-def build_promotions(db: Session, lot: Lot, language: str = "en") -> list[Promotion]:
+def build_promotions(
+    db: Session,
+    lot: Lot,
+    language: str = "en",
+    *,
+    user_id: int = 0,
+    ai_provider: AIProvider | None = None,
+) -> list[Promotion]:
     """Generate three auditable promotional variants for a lot via the LLM client."""
     if not lot:
         raise HTTPException(status_code=404, detail="Lot not found")
-    client = build_client()
+    provider = ai_provider or build_client()
     promotions = []
     for variant in VARIANTS:
         prompt = build_prompt(lot, language, variant)
-        text = client.complete(prompt)
+        text = provider.generate_structured(
+            prompt=prompt,
+            response_model=PromotionCopy,
+            user_id=user_id,
+            locale=language,
+            prompt_version=PROMOTION_PROMPT_VERSION,
+        ).text
         promotions.append(
             Promotion(lot_id=lot.id, language=language, variant=f"variant-{variant}", text=text, prompt=prompt)
         )

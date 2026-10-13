@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_model: str = "gpt-4o-mini"
     openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    ai_model_fast: str = "claude-haiku-5-5"
+    ai_model_smart: str = "claude-sonnet-5-5"
+    ai_max_tokens: int = Field(default=512, gt=0, le=2048)
+    ai_timeout_seconds: float = Field(default=20, gt=0, le=120)
+    ai_daily_quota: int = Field(default=25, gt=0)
+    ai_cache_ttl_seconds: int = Field(default=900, gt=0)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -45,6 +52,12 @@ class Settings(BaseSettings):
                 raise ValueError("Production requires a JWT_SECRET of at least 32 characters")
             if not self.refresh_cookie_secure:
                 raise ValueError("Production refresh cookies must be secure")
+            if self.llm_provider == "mock":
+                raise ValueError("Production requires a configured AI provider")
+            if self.llm_provider == "anthropic" and not self.anthropic_api_key:
+                raise ValueError("Anthropic requires ANTHROPIC_API_KEY")
+            if self.llm_provider == "openai" and not (self.llm_api_key or self.openai_api_key):
+                raise ValueError("OpenAI requires an API key")
         return self
 
 

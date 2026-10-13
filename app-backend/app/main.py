@@ -1,16 +1,20 @@
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
+from datetime import time as datetime_time
+from datetime import timedelta, timezone
 from uuid import uuid4
 
 from botocore.exceptions import BotoCoreError
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, select
+from kombu.exceptions import OperationalError
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
+from app.application.ai_dto import ExpiryDateRead
 from app.application.dto import DailySales
 from app.auth import current_user
 from app.config import settings
@@ -22,18 +26,38 @@ from app.dependencies import (
     build_train_sales_forecast_model_use_case,
 )
 from app.domain.exceptions import (
+    AIProviderUnavailableError,
+    AIQuotaExceededError,
+    AIResponseInvalidError,
     BatchAlreadyReservedError,
     InsufficientSalesHistoryError,
     InsufficientSalesTrainingDataError,
+    InvalidImageError,
     InvalidSalesHistoryCsvError,
     RefreshSessionStoreUnavailableError,
 )
-from app.domain.rules import MAX_IMAGE_UPLOAD_BYTES, MAX_SALES_HISTORY_IMPORT_BYTES
+from app.domain.rules import (
+    MAX_IMAGE_UPLOAD_BYTES,
+    MAX_SALES_HISTORY_IMPORT_BYTES,
+    MIN_EXPIRY_OCR_CONFIDENCE,
+)
+from app.llm import build_client
 from app.migrations import upgrade_database_schema
-from app.models import Donation, Lot, Product, Promotion, Reservation, Shop, User
+from app.models import (
+    Donation,
+    ExpiryScanSuggestion,
+    Lot,
+    Product,
+    Promotion,
+    Reservation,
+    Shop,
+    User,
+)
 from app.presentation.routers.auth import router as auth_router
+from app.prompts import EXPIRY_SCAN_PROMPT_VERSION, build_expiry_scan_prompt
 from app.schemas import (
     DonationCreate,
+    ExpiryScanSuggestionOut,
     LotCreate,
     LotOut,
     PickupConfirmation,
@@ -56,7 +80,7 @@ from app.services import (
     donate_lot,
     reserve_lot,
 )
-from app.storage import get_storage
+from app.storage import get_storage, sanitize_image
 from app.synthetic_sales import DEFAULT_HISTORY_DAYS, generate_shop_sales_history
 from app.worker import generate_promotions_task
 
@@ -85,6 +109,30 @@ def handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
 @app.exception_handler(RefreshSessionStoreUnavailableError)
 def handle_refresh_session_store_error(request: Request, exc: RefreshSessionStoreUnavailableError) -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": "Authentication service is unavailable"})
+
+
+@app.exception_handler(AIQuotaExceededError)
+def handle_ai_quota_error(_request: Request, _exc: AIQuotaExceededError) -> JSONResponse:
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Daily AI request allowance exceeded", "code": "ai_quota_exceeded"},
+    )
+
+
+@app.exception_handler(AIResponseInvalidError)
+def handle_invalid_ai_response(_request: Request, _exc: AIResponseInvalidError) -> JSONResponse:
+    return JSONResponse(
+        status_code=502,
+        content={"detail": "AI provider returned an invalid response", "code": "ai_response_invalid"},
+    )
+
+
+@app.exception_handler(AIProviderUnavailableError)
+def handle_ai_provider_error(_request: Request, _exc: AIProviderUnavailableError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "AI service is unavailable", "code": "ai_provider_unavailable"},
+    )
 
 
 @app.exception_handler(InvalidSalesHistoryCsvError)
@@ -133,14 +181,6 @@ def lot_response(lot: Lot) -> LotOut:
         except BotoCoreError as exc:
             raise HTTPException(status_code=503, detail="Image storage unavailable") from exc
     return LotOut.model_validate(lot).model_copy(update={"image_url": image_url})
-
-
-def image_signature_matches(content: bytes, content_type: str) -> bool:
-    if content_type == "image/jpeg":
-        return content.startswith(b"\xff\xd8\xff")
-    if content_type == "image/png":
-        return content.startswith(b"\x89PNG\r\n\x1a\n")
-    return len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP"
 
 
 def require_business(user: User) -> None:
@@ -306,6 +346,7 @@ def shop_waste_risk(
             current_stock=lot.quantity,
             expires_at=expires_at,
             language=language,
+            user_id=user.id,
         )
         results.append(
             WasteRiskOut(
@@ -361,11 +402,13 @@ async def upload_image(
     content = await image.read(MAX_IMAGE_UPLOAD_BYTES + 1)
     if len(content) > MAX_IMAGE_UPLOAD_BYTES:
         raise HTTPException(413, "Image is too large")
-    if not image_signature_matches(content, image.content_type):
-        raise HTTPException(415, "Image content does not match its declared type")
+    try:
+        content, content_type = sanitize_image(content, image.content_type)
+    except InvalidImageError as exc:
+        raise HTTPException(415, "Uploaded image is invalid or unsupported") from exc
     key = f"lots/{lot_id}/{uuid4().hex}"
     try:
-        get_storage().upload(key, content, image.content_type)
+        get_storage().upload(key, content, content_type)
     except BotoCoreError as exc:
         raise HTTPException(503, "Image storage unavailable") from exc
     lot.image_key = key
@@ -373,6 +416,151 @@ async def upload_image(
     db.commit()
     db.refresh(lot)
     return lot_response(lot)
+
+
+@app.post(
+    "/api/v1/lots/{lot_id}/expiry-scans",
+    response_model=ExpiryScanSuggestionOut,
+    status_code=201,
+    dependencies=[Depends(rate_limited(3, 60))],
+)
+def scan_expiry_date(
+    lot_id: int,
+    language: str = Query("en", pattern="^(en|es)$"),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> ExpiryScanSuggestionOut:
+    require_business(user)
+    lot = db.get(Lot, lot_id)
+    if not lot or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Lot not found")
+    if not lot.image_key:
+        raise HTTPException(409, "Upload a lot image before scanning its expiry date")
+    try:
+        image_data, image_mime_type = get_storage().download(lot.image_key)
+    except BotoCoreError as exc:
+        raise HTTPException(503, "Image storage unavailable") from exc
+    if len(image_data) > MAX_IMAGE_UPLOAD_BYTES:
+        raise HTTPException(415, "Stored lot image is invalid")
+    try:
+        image_data, image_mime_type = sanitize_image(image_data, image_mime_type)
+    except InvalidImageError as exc:
+        raise HTTPException(415, "Stored lot image is invalid") from exc
+
+    result = build_client().generate_structured(
+        prompt=build_expiry_scan_prompt(language),
+        response_model=ExpiryDateRead,
+        user_id=user.id,
+        locale=language,
+        prompt_version=EXPIRY_SCAN_PROMPT_VERSION,
+        image_data=image_data,
+        image_mime_type=image_mime_type,
+        model_tier="smart",
+    )
+    is_readable = result.expires_on is not None and result.confidence >= MIN_EXPIRY_OCR_CONFIDENCE
+    db.execute(
+        update(ExpiryScanSuggestion)
+        .where(
+            ExpiryScanSuggestion.lot_id == lot.id,
+            ExpiryScanSuggestion.status == "awaiting_confirmation",
+        )
+        .values(status="rejected")
+    )
+    suggestion = ExpiryScanSuggestion(
+        lot_id=lot.id,
+        user_id=user.id,
+        printed_date=result.printed_date,
+        expires_on=result.expires_on,
+        confidence=result.confidence,
+        status="awaiting_confirmation" if is_readable else "unreadable",
+    )
+    db.add(suggestion)
+    db.commit()
+    db.refresh(suggestion)
+    return ExpiryScanSuggestionOut.model_validate(suggestion)
+
+
+@app.get(
+    "/api/v1/lots/{lot_id}/expiry-scans",
+    response_model=list[ExpiryScanSuggestionOut],
+)
+def list_expiry_scans(
+    lot_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> list[ExpiryScanSuggestion]:
+    require_business(user)
+    lot = db.get(Lot, lot_id)
+    if not lot or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Lot not found")
+    return list(
+        db.scalars(
+            select(ExpiryScanSuggestion)
+            .where(ExpiryScanSuggestion.lot_id == lot_id)
+            .order_by(ExpiryScanSuggestion.created_at.desc(), ExpiryScanSuggestion.id.desc())
+        )
+    )
+
+
+@app.post(
+    "/api/v1/lots/{lot_id}/expiry-scans/{suggestion_id}/confirm",
+    response_model=ExpiryScanSuggestionOut,
+)
+def confirm_expiry_scan(
+    lot_id: int,
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> ExpiryScanSuggestionOut:
+    require_business(user)
+    lot = db.scalar(select(Lot).where(Lot.id == lot_id).with_for_update())
+    if not lot or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Lot not found")
+    suggestion = db.scalar(
+        select(ExpiryScanSuggestion)
+        .where(
+            ExpiryScanSuggestion.id == suggestion_id,
+            ExpiryScanSuggestion.lot_id == lot_id,
+            ExpiryScanSuggestion.status == "awaiting_confirmation",
+        )
+        .with_for_update()
+    )
+    if not suggestion or suggestion.expires_on is None:
+        raise HTTPException(409, "Expiry-date suggestion is not awaiting confirmation")
+    lot.expires_at = datetime.combine(suggestion.expires_on, datetime_time.max, tzinfo=timezone.utc)
+    suggestion.status = "confirmed"
+    db.commit()
+    db.refresh(suggestion)
+    return ExpiryScanSuggestionOut.model_validate(suggestion)
+
+
+@app.post(
+    "/api/v1/lots/{lot_id}/expiry-scans/{suggestion_id}/reject",
+    response_model=ExpiryScanSuggestionOut,
+)
+def reject_expiry_scan(
+    lot_id: int,
+    suggestion_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> ExpiryScanSuggestionOut:
+    require_business(user)
+    lot = db.get(Lot, lot_id)
+    if not lot or (lot.shop.owner_id != user.id and not user.is_admin):
+        raise HTTPException(404, "Lot not found")
+    suggestion = db.scalar(
+        select(ExpiryScanSuggestion).where(
+            ExpiryScanSuggestion.id == suggestion_id,
+            ExpiryScanSuggestion.lot_id == lot_id,
+            ExpiryScanSuggestion.status == "awaiting_confirmation",
+        )
+    )
+    if not suggestion:
+        raise HTTPException(409, "Expiry-date suggestion is not awaiting confirmation")
+    suggestion.status = "rejected"
+    db.commit()
+    db.refresh(suggestion)
+    return ExpiryScanSuggestionOut.model_validate(suggestion)
 
 
 @app.get("/api/v1/lots", response_model=list[LotOut])
@@ -525,9 +713,9 @@ def generate_promos(
     if not lot or lot.shop.owner_id != user.id:
         raise HTTPException(404, "Lot not found")
     try:
-        generate_promotions_task.delay(lot_id, language)
-    except Exception:
-        build_promotions(db, lot, language)
+        generate_promotions_task.delay(lot_id, user.id, language)
+    except OperationalError:
+        build_promotions(db, lot, language, user_id=user.id)
     return {"status": "queued"}
 
 
