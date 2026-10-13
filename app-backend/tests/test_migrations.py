@@ -17,6 +17,42 @@ from sqlalchemy import (
 )
 
 
+def test_upgrade_creates_the_complete_schema_from_an_empty_database(tmp_path: Path) -> None:
+    database_path = tmp_path / "fresh_sobracero.db"
+    database_url = f"sqlite:///{database_path.as_posix()}"
+    engine = create_engine(database_url)
+    backend_root = Path(__file__).resolve().parents[1]
+    config = Config(str(backend_root / "alembic.ini"))
+    config.set_main_option("script_location", str(backend_root / "migrations"))
+    config.set_main_option("sqlalchemy.url", database_url)
+
+    command.upgrade(config, "head")
+    command.upgrade(config, "head")
+
+    inspector = inspect(engine)
+    assert {
+        "users",
+        "shops",
+        "products",
+        "lots",
+        "reservations",
+        "donations",
+        "promotions",
+        "sales_history",
+        "waste_predictions",
+    }.issubset(set(inspector.get_table_names()))
+    assert {"role"} <= {column["name"] for column in inspector.get_columns("users")}
+    assert {"pickup_code"} <= {column["name"] for column in inspector.get_columns("reservations")}
+    assert "ix_users_email" in {index["name"] for index in inspector.get_indexes("users")}
+    assert "ix_reservations_pickup_code" in {index["name"] for index in inspector.get_indexes("reservations")}
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == "0003_roles_categories_and_pickup_codes"
+        )
+    engine.dispose()
+
+
 def test_upgrade_adds_new_fields_and_backfills_existing_pickup_codes(tmp_path: Path) -> None:
     database_path = tmp_path / "existing_sobracero.db"
     database_url = f"sqlite:///{database_path.as_posix()}"

@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse
 
 from app.auth import current_user
 from app.config import settings
-from app.db import Base, engine, get_db
+from app.db import engine, get_db
 from app.dependencies import build_calculate_waste_risk_use_case
 from app.domain.exceptions import (
     BatchAlreadyReservedError,
@@ -50,7 +50,6 @@ from app.storage import get_storage
 from app.synthetic_sales import DEFAULT_HISTORY_DAYS, generate_shop_sales_history
 from app.worker import generate_promotions_task
 
-Base.metadata.create_all(bind=engine)
 backend_root = Path(__file__).resolve().parent.parent
 alembic_config = Config(str(backend_root / "alembic.ini"))
 alembic_config.set_main_option("script_location", str(backend_root / "migrations"))
