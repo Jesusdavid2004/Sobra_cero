@@ -6,7 +6,7 @@ from datetime import time as datetime_time
 from datetime import timedelta, timezone
 from uuid import uuid4
 
-from botocore.exceptions import BotoCoreError
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from kombu.exceptions import OperationalError
@@ -181,7 +181,7 @@ def lot_response(lot: Lot) -> LotOut:
     if lot.image_key:
         try:
             image_url = get_storage().signed_url(lot.image_key)
-        except BotoCoreError as exc:
+        except (BotoCoreError, ClientError) as exc:
             raise HTTPException(status_code=503, detail="Image storage unavailable") from exc
     return LotOut.model_validate(lot).model_copy(update={"image_url": image_url})
 
@@ -423,7 +423,7 @@ async def upload_image(
     key = f"lots/{lot_id}/{uuid4().hex}"
     try:
         get_storage().upload(key, content, content_type)
-    except BotoCoreError as exc:
+    except (BotoCoreError, ClientError) as exc:
         raise HTTPException(503, "Image storage unavailable") from exc
     lot.image_key = key
     lot.image_url = None
@@ -452,7 +452,7 @@ def scan_expiry_date(
         raise HTTPException(409, "Upload a lot image before scanning its expiry date")
     try:
         image_data, image_mime_type = get_storage().download(lot.image_key)
-    except BotoCoreError as exc:
+    except (BotoCoreError, ClientError) as exc:
         raise HTTPException(503, "Image storage unavailable") from exc
     if len(image_data) > MAX_IMAGE_UPLOAD_BYTES:
         raise HTTPException(415, "Stored lot image is invalid")

@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     minio_bucket: str = "lots"
     minio_public_url: str = "http://localhost:9000"
     minio_secure: bool = False
+    minio_region: str = "us-east-1"
 
     llm_provider: str = "mock"
     llm_api_key: str | None = None

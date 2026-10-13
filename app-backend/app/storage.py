@@ -22,6 +22,9 @@ from app.domain.rules import (
     SIGNED_IMAGE_URL_TTL_SECONDS,
 )
 
+DEFAULT_STORAGE_REGION = "us-east-1"
+BUCKET_MISSING_CODES = {"404", "NoSuchBucket", "NotFound"}
+
 IMAGE_FORMATS = {
     "JPEG": ("image/jpeg", "JPEG"),
     "PNG": ("image/png", "PNG"),
@@ -75,7 +78,9 @@ class ObjectStorage:
         bucket: str,
         public_url: str,
         secure: bool = False,
+        region: str = DEFAULT_STORAGE_REGION,
     ) -> None:
+        self.region = region
         self.endpoint = endpoint
         self.access_key = access_key
         self.secret_key = secret_key
@@ -95,7 +100,7 @@ class ObjectStorage:
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
                 config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-                region_name="us-east-1",
+                region_name=self.region,
             )
         return self._client
 
@@ -103,7 +108,9 @@ class ObjectStorage:
         """Create the bucket if it does not exist yet."""
         try:
             self.client.head_bucket(Bucket=self.bucket)
-        except ClientError:
+        except ClientError as exc:
+            if str(exc.response.get("Error", {}).get("Code")) not in BUCKET_MISSING_CODES:
+                return
             self.client.create_bucket(Bucket=self.bucket)
 
     def upload(self, key: str, data: bytes, content_type: str) -> None:
@@ -120,7 +127,7 @@ class ObjectStorage:
                 aws_access_key_id=self.access_key,
                 aws_secret_access_key=self.secret_key,
                 config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-                region_name="us-east-1",
+                region_name=self.region,
             )
         return str(
             self._signing_client.generate_presigned_url(
@@ -157,5 +164,6 @@ def get_storage() -> ObjectStorage:
             bucket=settings.minio_bucket,
             public_url=settings.minio_public_url,
             secure=settings.minio_secure,
+            region=settings.minio_region,
         )
     return _storage
