@@ -231,6 +231,8 @@ export default function ShopPage() {
           </p>
         ) : null}
 
+        {user?.role === "business" && !loading ? <PickupConfirmationForm t={t} /> : null}
+
         {loading ? (
           <p className="py-12 text-stone-600">{t.dashboardLoadingRisk}</p>
         ) : (
@@ -529,6 +531,90 @@ type FormState = {
   longitude: string;
   business_type: "restaurant" | "supermarket";
 };
+
+function PickupConfirmationForm({ t }: { t: Record<string, string> }) {
+  const [reservationId, setReservationId] = useState("");
+  const [pickupCode, setPickupCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setMessage("");
+    try {
+      const parsedReservationId = Number(reservationId);
+      if (!Number.isSafeInteger(parsedReservationId) || parsedReservationId <= 0) {
+        throw new Error("Invalid reservation reference");
+      }
+      const result = await api.confirmPickup(parsedReservationId, pickupCode.trim());
+      if (result.status !== "picked_up") throw new Error("Pickup was not completed");
+      setReservationId("");
+      setPickupCode("");
+      setMessage(t.pickupSuccess);
+    } catch {
+      setError(t.pickupError);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mt-6 rounded-3xl border border-[#e0e5da] bg-white p-5 md:p-7">
+      <h2 className="text-xl font-black">{t.pickupTitle}</h2>
+      <p className="mt-2 text-sm text-stone-600">{t.pickupDescription}</p>
+      <form onSubmit={submit} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <label className="text-sm font-semibold">
+          <span className="mb-1 block">{t.pickupReservationId}</span>
+          <input
+            type="number"
+            min={1}
+            required
+            value={reservationId}
+            onChange={(event) => setReservationId(event.target.value)}
+            className="w-full rounded-xl border border-stone-300 px-4 py-3"
+          />
+        </label>
+        <label className="text-sm font-semibold">
+          <span className="mb-1 block">{t.pickupCode}</span>
+          <input
+            type="text"
+            required
+            autoComplete="off"
+            autoCapitalize="characters"
+            maxLength={8}
+            pattern="[A-Fa-f0-9]{8}"
+            value={pickupCode}
+            onChange={(event) => setPickupCode(event.target.value)}
+            className="w-full rounded-xl border border-stone-300 px-4 py-3"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-xl bg-emerald-700 px-5 py-3 font-bold text-white hover:bg-emerald-800 disabled:opacity-50"
+        >
+          {t.pickupSubmit}
+        </button>
+      </form>
+      {message ? (
+        <p
+          role="status"
+          className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+        >
+          {message}
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
 
 function ShopForm({
   title,

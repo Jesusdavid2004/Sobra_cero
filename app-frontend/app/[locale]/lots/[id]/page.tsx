@@ -48,7 +48,9 @@ export default function LotDetailPage() {
     setError("");
     try {
       const reservation = await api.reserve(lotId, Number(quantity));
-      setMessage(`${t.detailReserved} ${t.reservationPickupCode}: ${reservation.pickup_code}`);
+      setMessage(
+        `${t.detailReserved} ${t.reservationReference}: ${reservation.id}. ${t.reservationPickupCode}: ${reservation.pickup_code}`,
+      );
       await load();
     } catch (cause) {
       setError(

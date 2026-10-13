@@ -136,6 +136,62 @@ def test_reservation_can_be_cancelled_and_picked_up_by_the_shop():
     )
 
 
+def test_pickup_confirmation_requires_the_owning_business():
+    reset_db()
+    client, owner_headers = register_client("business", "owner@example.com")
+    lot_id = create_lot(client, owner_headers)
+    _, customer_headers = register_client("customer", "customer@example.com")
+    _, other_business_headers = register_client("business", "other@example.com")
+    reservation = client.post(
+        f"/api/v1/lots/{lot_id}/reserve",
+        json={"quantity": 1},
+        headers=customer_headers,
+    ).json()
+    pickup_path = f"/api/v1/reservations/{reservation['id']}/pickup"
+    payload = {"pickup_code": reservation["pickup_code"]}
+
+    customer_attempt = client.post(pickup_path, json=payload, headers=customer_headers)
+    other_business_attempt = client.post(pickup_path, json=payload, headers=other_business_headers)
+    owner_attempt = client.post(pickup_path, json=payload, headers=owner_headers)
+
+    assert customer_attempt.status_code == 403
+    assert other_business_attempt.status_code == 404
+    assert owner_attempt.status_code == 200
+    assert owner_attempt.json()["status"] == "picked_up"
+
+
+def test_pickup_confirmation_is_rate_limited():
+    reset_db()
+    client, owner_headers = register_client("business", "owner@example.com")
+    lot_id = create_lot(client, owner_headers)
+    _, customer_headers = register_client("customer", "customer@example.com")
+    reservation = client.post(
+        f"/api/v1/lots/{lot_id}/reserve",
+        json={"quantity": 1},
+        headers=customer_headers,
+    ).json()
+    pickup_path = f"/api/v1/reservations/{reservation['id']}/pickup"
+    main._rate_buckets.clear()
+
+    try:
+        for _ in range(5):
+            response = client.post(
+                pickup_path,
+                json={"pickup_code": "00000000"},
+                headers=owner_headers,
+            )
+            assert response.status_code == 404
+
+        limited_response = client.post(
+            pickup_path,
+            json={"pickup_code": "00000000"},
+            headers=owner_headers,
+        )
+        assert limited_response.status_code == 429
+    finally:
+        main._rate_buckets.clear()
+
+
 def test_shop_can_cancel_a_lot_and_its_active_reservations():
     reset_db()
     client, business_headers = register_client()

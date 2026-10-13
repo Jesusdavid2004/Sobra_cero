@@ -681,7 +681,10 @@ def cancel_reservation_route(
     return {"id": reservation.id, "status": reservation.status, "quantity": reservation.quantity}
 
 
-@app.post("/api/v1/reservations/{reservation_id}/pickup")
+@app.post(
+    "/api/v1/reservations/{reservation_id}/pickup",
+    dependencies=[Depends(rate_limited(5, 60))],
+)
 def confirm_pickup(
     reservation_id: int,
     data: PickupConfirmation,

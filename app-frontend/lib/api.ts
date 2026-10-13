@@ -219,6 +219,14 @@ export const api = {
         body: JSON.stringify({ quantity }),
       },
     ),
+  confirmPickup: (reservationId: number, pickupCode: string) =>
+    request<{ id: number; status: string; quantity: number }>(
+      `/reservations/${reservationId}/pickup`,
+      {
+        method: "POST",
+        body: JSON.stringify({ pickup_code: pickupCode }),
+      },
+    ),
   generatePromos: (lotId: number, lang: string) =>
     request<{ status: string }>(`/lots/${lotId}/generate-promos?language=${lang}`, {
       method: "POST",
