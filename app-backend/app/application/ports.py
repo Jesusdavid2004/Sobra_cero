@@ -1,7 +1,13 @@
 from datetime import date
 from typing import Protocol, Sequence
 
-from app.application.dto import DailySales, PredictionEstimate
+from app.application.dto import (
+    AuthUser,
+    DailySales,
+    PredictionEstimate,
+    SessionTokens,
+    UserRole,
+)
 
 
 class SalesHistoryRepository(Protocol):
@@ -31,3 +37,31 @@ class PredictionModel(Protocol):
 
 class AIProvider(Protocol):
     def complete(self, prompt: str) -> str: ...
+
+
+class AuthUserRepository(Protocol):
+    def find_by_email(self, email: str) -> AuthUser | None: ...
+
+    def create_user(self, email: str, password_hash: str, role: UserRole) -> AuthUser: ...
+
+
+class PasswordHasher(Protocol):
+    def hash(self, password: str) -> str: ...
+
+    def verify(self, password: str, password_hash: str) -> bool: ...
+
+
+class SessionManager(Protocol):
+    def issue(self, user_id: int) -> SessionTokens: ...
+
+    def rotate(self, refresh_token: str) -> SessionTokens: ...
+
+    def revoke(self, refresh_token: str) -> None: ...
+
+
+class RefreshTokenStore(Protocol):
+    def issue(self, token_id: str, user_id: int, ttl_seconds: int) -> bool: ...
+
+    def rotate(self, old_token_id: str, new_token_id: str, user_id: int, ttl_seconds: int) -> bool: ...
+
+    def revoke(self, token_id: str, user_id: int) -> None: ...

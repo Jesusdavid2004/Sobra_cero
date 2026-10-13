@@ -79,12 +79,54 @@ export class ApiError extends Error {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
+let accessToken: string | null = null;
+let refreshPromise: Promise<string | null> | null = null;
+const accessTokenListeners = new Set<(token: string | null) => void>();
+
 export function getToken(): string | null {
-  if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("token");
+  return accessToken;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+  for (const listener of accessTokenListeners) listener(token);
+}
+
+export function subscribeToAccessToken(listener: (token: string | null) => void): () => void {
+  accessTokenListeners.add(listener);
+  return () => accessTokenListeners.delete(listener);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${BASE}/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then(async (response) => {
+        if (response.status === 401) {
+          setAccessToken(null);
+          return null;
+        }
+        if (!response.ok) {
+          throw new ApiError(`Request failed (${response.status})`, response.status);
+        }
+        const body = (await response.json()) as { access_token: string };
+        setAccessToken(body.access_token);
+        return body.access_token;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+async function request<T>(
+  path: string,
+  options: RequestInit = {},
+  allowRefresh = true,
+): Promise<T> {
   const token = getToken();
   const headers = new Headers(options.headers);
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -94,15 +136,27 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (options.body && !(options.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");
   }
-  const response = await fetch(`${BASE}${path}`, { ...options, headers });
-  if (response.status === 401) {
-    window.localStorage.removeItem("token");
+  const response = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers,
+    credentials: "include",
+  });
+  const isSessionEndpoint = [
+    "/auth/login",
+    "/auth/register",
+    "/auth/refresh",
+    "/auth/logout",
+  ].includes(path);
+  if (response.status === 401 && allowRefresh && !isSessionEndpoint) {
+    const refreshedToken = await refreshAccessToken();
+    if (refreshedToken) return request<T>(path, options, false);
   }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const detail = Array.isArray(body.detail) ? body.detail[0]?.msg : body.detail;
     throw new ApiError(detail ?? `Request failed (${response.status})`, response.status, body.code);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -117,6 +171,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, password, role }),
     }),
+  refresh: () => refreshAccessToken(),
+  logout: async () => {
+    await request<void>("/auth/logout", { method: "POST" }, false);
+    setAccessToken(null);
+  },
   me: () => request<User>("/auth/me"),
   shops: () => request<Shop[]>("/shops"),
   createShop: (data: Omit<Shop, "id" | "owner_id">) =>

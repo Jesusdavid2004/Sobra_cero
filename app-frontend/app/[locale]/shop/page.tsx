@@ -9,7 +9,7 @@ import { ApiError, api, type Product, type Shop, type WasteRisk } from "@/lib/ap
 import { useApp } from "@/providers/AppProviders";
 
 export default function ShopPage() {
-  const { t, token, lang, user } = useApp();
+  const { t, token, authReady, lang, user } = useApp();
   const router = useRouter();
   const [shops, setShops] = useState<Shop[]>([]);
   const [products, setProducts] = useState<Record<number, Product[]>>({});
@@ -70,6 +70,7 @@ export default function ShopPage() {
   }, [t.genericError]);
 
   useEffect(() => {
+    if (!authReady) return;
     if (!token) {
       router.replace("/login");
       return;
@@ -80,7 +81,7 @@ export default function ShopPage() {
     }
     if (!user) return;
     void load();
-  }, [token, user, router, load]);
+  }, [authReady, token, user, router, load]);
 
   useEffect(() => {
     if (!selectedShopId) {

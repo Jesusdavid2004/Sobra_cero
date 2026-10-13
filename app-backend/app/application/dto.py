@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from datetime import date
+from typing import Literal
 
 from app.domain.value_objects import RiskScore
+
+UserRole = Literal["business", "customer"]
 
 
 @dataclass(frozen=True)
@@ -32,3 +35,18 @@ class WasteRiskResult:
     units_at_risk: float
     risk_score: RiskScore
     recommendation: str
+
+
+@dataclass(frozen=True)
+class AuthUser:
+    id: int
+    email: str
+    password_hash: str
+    role: UserRole
+    is_admin: bool
+
+
+@dataclass(frozen=True)
+class SessionTokens:
+    access_token: str
+    refresh_token: str

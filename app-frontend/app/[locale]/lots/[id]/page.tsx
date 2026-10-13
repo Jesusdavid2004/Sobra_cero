@@ -9,7 +9,7 @@ import { ApiError, api, type Lot, type Promotion } from "@/lib/api";
 import { useApp } from "@/providers/AppProviders";
 
 export default function LotDetailPage() {
-  const { t, token, lang, user } = useApp();
+  const { t, token, authReady, lang, user } = useApp();
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const lotId = Number(params?.id);
@@ -37,6 +37,7 @@ export default function LotDetailPage() {
 
   const reserve = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!authReady) return;
     if (!token) {
       router.push("/login");
       return;
@@ -159,7 +160,7 @@ export default function LotDetailPage() {
               />
               <button
                 type="submit"
-                disabled={busy || lot.quantity === 0}
+                disabled={!authReady || busy || lot.quantity === 0}
                 className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
                 {t.detailReserveSubmit}

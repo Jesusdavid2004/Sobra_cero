@@ -7,7 +7,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { usePathname, useRouter } from "@/i18n/navigation";
 import en from "@/i18n/en.json";
 import es from "@/i18n/es.json";
-import { api, getToken, type User } from "@/lib/api";
+import { api, setAccessToken, subscribeToAccessToken, type User } from "@/lib/api";
 import { nextThemePreference, type ThemePreference } from "@/lib/theme-preference";
 
 type Lang = "en" | "es";
@@ -22,9 +22,11 @@ type AppState = {
   themePreference: ThemePreference;
   toggleTheme: () => void;
   token: string | null;
+  authReady: boolean;
+  authError: boolean;
   user: User | null;
   login: (token: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
 };
 
 const AppContext = createContext<AppState | null>(null);
@@ -54,6 +56,8 @@ function AppStateProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { resolvedTheme, theme: configuredTheme, setTheme } = useTheme();
   const [token, setToken] = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
   const t = useMemo(
@@ -79,10 +83,27 @@ function AppStateProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    setToken(getToken());
+    const unsubscribe = subscribeToAccessToken((nextToken) => {
+      setToken(nextToken);
+      if (!nextToken) setUser(null);
+      else setAuthError(false);
+    });
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
     }
+    let mounted = true;
+    api
+      .refresh()
+      .catch(() => {
+        if (mounted) setAuthError(true);
+      })
+      .finally(() => {
+        if (mounted) setAuthReady(true);
+      });
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -97,14 +118,14 @@ function AppStateProvider({ children }: { children: ReactNode }) {
   }, [token]);
 
   const login = (nextToken: string) => {
-    window.localStorage.setItem("token", nextToken);
-    setToken(nextToken);
+    setAccessToken(nextToken);
+    setUser(null);
+    setAuthReady(true);
+    setAuthError(false);
   };
 
-  const logout = () => {
-    window.localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    await api.logout();
   };
 
   const themePreference: ThemePreference =
@@ -120,6 +141,8 @@ function AppStateProvider({ children }: { children: ReactNode }) {
         themePreference,
         toggleTheme: () => setTheme(nextThemePreference(themePreference)),
         token,
+        authReady,
+        authError,
         user,
         login,
         logout,

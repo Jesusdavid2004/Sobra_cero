@@ -8,7 +8,7 @@ import { api, type Forecast, type Report, type Shop } from "@/lib/api";
 import { useApp } from "@/providers/AppProviders";
 
 export default function AdminPage() {
-  const { t, token } = useApp();
+  const { t, token, authReady } = useApp();
   const router = useRouter();
   const [report, setReport] = useState<Report | null>(null);
   const [shops, setShops] = useState<Shop[]>([]);
@@ -16,6 +16,7 @@ export default function AdminPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!authReady) return;
     if (!token) {
       router.replace("/login");
       return;
@@ -31,7 +32,7 @@ export default function AdminPage() {
         if (list.length) setForecast(await api.forecast(list[0].id).catch(() => null));
       })
       .catch(() => setShops([]));
-  }, [token, router, t.genericError]);
+  }, [authReady, token, router, t.genericError]);
 
   const rows = report
     ? [

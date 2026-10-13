@@ -1,13 +1,29 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.domain.rules import MAX_DISCOUNT_PERCENT
 
 
-class UserCreate(BaseModel):
+class AuthCredentials(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def validate_bcrypt_password_length(cls, value: str) -> str:
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must not exceed 72 UTF-8 bytes")
+        return value
+
+
+class UserCreate(AuthCredentials):
     role: Literal["business", "customer"] = "business"
+
+
+class LoginRequest(AuthCredentials):
+    pass
 
 
 class Token(BaseModel):
@@ -56,7 +72,7 @@ class LotCreate(BaseModel):
     description: str = ""
     quantity: int = Field(gt=0, le=10000)
     original_price_cents: int = Field(ge=0)
-    discount_percent: int = Field(ge=0, le=100)
+    discount_percent: int = Field(ge=0, le=MAX_DISCOUNT_PERCENT)
     expires_at: datetime
 
 

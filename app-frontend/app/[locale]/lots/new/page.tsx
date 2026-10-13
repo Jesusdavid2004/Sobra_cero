@@ -9,6 +9,8 @@ import { api, type Product, type Shop } from "@/lib/api";
 import { compressImage } from "@/lib/image";
 import { useApp } from "@/providers/AppProviders";
 
+const MAX_DISCOUNT_PERCENT = 90;
+
 export default function NewLotPage() {
   return (
     <Suspense fallback={<p className="px-6 pt-12">…</p>}>
@@ -18,7 +20,7 @@ export default function NewLotPage() {
 }
 
 function NewLotForm() {
-  const { t, token, lang } = useApp();
+  const { t, token, authReady, lang } = useApp();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [shops, setShops] = useState<Shop[]>([]);
@@ -39,13 +41,14 @@ function NewLotForm() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!authReady) return;
     if (!token) router.replace("/login");
     else
       api
         .shops()
         .then(setShops)
         .catch(() => setShops([]));
-  }, [token, router]);
+  }, [authReady, token, router]);
 
   const loadProducts = useCallback((shopId: string) => {
     if (!shopId) {
@@ -184,7 +187,7 @@ function NewLotForm() {
               required
               type="number"
               min={0}
-              max={100}
+              max={MAX_DISCOUNT_PERCENT}
               value={form.discount_percent}
               onChange={(e) => setForm({ ...form, discount_percent: e.target.value })}
               placeholder={t.lotDiscount}

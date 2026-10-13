@@ -11,13 +11,14 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.responses import JSONResponse
 
-from app.auth import create_token, current_user, hash_password, verify_password
+from app.auth import current_user
 from app.config import settings
 from app.db import Base, engine, get_db
 from app.dependencies import build_calculate_waste_risk_use_case
 from app.domain.exceptions import (
     BatchAlreadyReservedError,
     InsufficientSalesHistoryError,
+    RefreshSessionStoreUnavailableError,
 )
 from app.models import (
     Donation,
@@ -29,6 +30,7 @@ from app.models import (
     Shop,
     User,
 )
+from app.presentation.routers.auth import router as auth_router
 from app.schemas import (
     DonationCreate,
     LotCreate,
@@ -41,9 +43,6 @@ from app.schemas import (
     SalesHistoryCreated,
     ShopCreate,
     ShopOut,
-    Token,
-    UserCreate,
-    UserOut,
     WasteRiskOut,
 )
 from app.services import build_promotions, donate_lot, reserve_lot
@@ -68,6 +67,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(auth_router)
 
 
 @app.exception_handler(InsufficientSalesHistoryError)
@@ -78,6 +78,11 @@ def handle_domain_error(request: Request, exc: Exception) -> JSONResponse:
         "batch_already_reserved" if isinstance(exc, BatchAlreadyReservedError) else "insufficient_sales_history"
     )
     return JSONResponse(status_code=status_code, content={"detail": str(exc), "code": error_code})
+
+
+@app.exception_handler(RefreshSessionStoreUnavailableError)
+def handle_refresh_session_store_error(request: Request, exc: RefreshSessionStoreUnavailableError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": "Authentication service is unavailable"})
 
 
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
@@ -109,30 +114,6 @@ def require_business(user: User) -> None:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
-
-
-@app.post("/api/v1/auth/register", response_model=Token, status_code=201)
-def register(data: UserCreate, db: Session = Depends(get_db)) -> Token:
-    if db.scalar(select(User).where(User.email == data.email)):
-        raise HTTPException(409, "Email already registered")
-    user = User(email=data.email, password_hash=hash_password(data.password), role=data.role)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return Token(access_token=create_token(user.id))
-
-
-@app.post("/api/v1/auth/login", response_model=Token)
-def login(data: UserCreate, db: Session = Depends(get_db)) -> Token:
-    user = db.scalar(select(User).where(User.email == data.email))
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(401, "Invalid credentials")
-    return Token(access_token=create_token(user.id))
-
-
-@app.get("/api/v1/auth/me", response_model=UserOut)
-def me(user: User = Depends(current_user)) -> User:
-    return user
 
 
 @app.post("/api/v1/shops", response_model=ShopOut, status_code=201)

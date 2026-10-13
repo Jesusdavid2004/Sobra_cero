@@ -4,7 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main
-from app.application.dto import DailySales
+from app.application.dto import DailySales, PredictionEstimate
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
 from app.db import Base, engine
 from app.domain.exceptions import (
@@ -109,6 +109,58 @@ def test_calculate_use_case_requires_history_before_model_call():
             language="en",
             today=date(2026, 10, 6),
         )
+
+
+def test_calculate_use_case_persists_prediction_and_returns_result():
+    today = date(2026, 10, 6)
+    history = [
+        DailySales(sales_date=today - timedelta(days=offset), units_sold=3, had_promotion=False)
+        for offset in range(14, 0, -1)
+    ]
+
+    class RecordingRepository:
+        saved_prediction = None
+
+        def list_for_product(self, product_id, since):
+            return history
+
+        def save_prediction(self, **kwargs):
+            self.saved_prediction = kwargs
+
+    class PredictingModel:
+        def predict(self, history, current_stock, days_remaining, calculation_date):
+            return PredictionEstimate(3.0, 6.0, 4.0, RiskScore(40))
+
+    class RecordingAI:
+        def complete(self, prompt):
+            assert "40/100" in prompt
+            assert "Respond in English" in prompt
+            return "Publish with a 30% discount."
+
+    repository = RecordingRepository()
+    use_case = CalculateWasteRiskUseCase(repository, PredictingModel(), RecordingAI())
+    result = use_case.execute(
+        product_id=1,
+        product_name="Bread",
+        business_type="restaurant",
+        lot_id=2,
+        current_stock=10,
+        expires_at=datetime(2026, 10, 8, tzinfo=timezone.utc),
+        language="en",
+        today=today,
+    )
+
+    assert result.risk_score == RiskScore(40)
+    assert result.expected_sales == 6.0
+    assert result.units_at_risk == 4.0
+    assert repository.saved_prediction == {
+        "product_id": 1,
+        "lot_id": 2,
+        "risk_score": 40,
+        "units_at_risk": 4.0,
+        "expected_sales": 6.0,
+        "recommendation": "Publish with a 30% discount.",
+    }
 
 
 def test_business_can_generate_sample_data_and_calculate_spanish_risk():

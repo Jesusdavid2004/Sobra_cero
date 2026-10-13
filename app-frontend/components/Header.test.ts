@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockState = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -19,11 +19,16 @@ const mockState = vi.hoisted(() => ({
       themeLight: "light",
       changeLanguage: "Change language",
       language: "Español",
+      login: "Log in",
+      logout: "Log out",
+      genericError: "Something went wrong",
     },
     theme: "light" as const,
     themePreference: "system" as const,
     toggleTheme: vi.fn(),
-    token: null,
+    token: null as string | null,
+    authReady: true,
+    authError: false,
     user: null,
     login: vi.fn(),
     logout: vi.fn(),
@@ -44,6 +49,7 @@ vi.mock("@/i18n/navigation", () => ({
 import Header from "./Header";
 
 afterEach(() => cleanup());
+beforeEach(() => vi.clearAllMocks());
 
 describe("Header", () => {
   it("exposes language and theme controls", () => {
@@ -54,5 +60,30 @@ describe("Header", () => {
 
     expect(mockState.value.toggleTheme).toHaveBeenCalledOnce();
     expect(mockState.value.setLang).toHaveBeenCalledWith("es");
+  });
+
+  it("logs out on the server before navigating away", async () => {
+    mockState.value.token = "access-token";
+    mockState.value.logout = vi.fn().mockResolvedValue(undefined);
+    mockState.value.t.logout = "Log out";
+    render(createElement(Header));
+
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    await waitFor(() => expect(mockState.navigate).toHaveBeenCalledWith("/"));
+    expect(mockState.value.logout).toHaveBeenCalledOnce();
+  });
+
+  it("shows an error when server logout fails", async () => {
+    mockState.value.token = "access-token";
+    mockState.value.logout = vi.fn().mockRejectedValue(new Error("network error"));
+    mockState.value.t.logout = "Log out";
+    mockState.navigate.mockClear();
+    render(createElement(Header));
+
+    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong");
+    expect(mockState.navigate).not.toHaveBeenCalled();
   });
 });

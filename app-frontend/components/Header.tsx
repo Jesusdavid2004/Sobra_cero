@@ -1,17 +1,36 @@
 "use client";
 
 import { Link, usePathname, useRouter } from "@/i18n/navigation";
+import { useState } from "react";
 
 import { useApp } from "@/providers/AppProviders";
 
 export default function Header() {
-  const { t, lang, setLang, theme, themePreference, toggleTheme, token, user, logout } = useApp();
+  const {
+    t,
+    lang,
+    setLang,
+    theme,
+    themePreference,
+    toggleTheme,
+    token,
+    authReady,
+    authError,
+    user,
+    logout,
+  } = useApp();
   const router = useRouter();
   const pathname = usePathname();
+  const [logoutError, setLogoutError] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    router.push("/");
+  const handleLogout = async () => {
+    setLogoutError(false);
+    try {
+      await logout();
+      router.push("/");
+    } catch {
+      setLogoutError(true);
+    }
   };
 
   return (
@@ -27,7 +46,7 @@ export default function Header() {
         >
           {t.navHome}
         </Link>
-        {token ? (
+        {authReady && token ? (
           <>
             {user?.role === "business" ? (
               <>
@@ -54,11 +73,11 @@ export default function Header() {
               {t.logout}
             </button>
           </>
-        ) : (
+        ) : authReady ? (
           <Link href="/login" className="rounded-full border px-3 py-2 text-sm">
             {t.login}
           </Link>
-        )}
+        ) : null}
         <button
           aria-label={t.themeLabel}
           title={t.themeMode.replace(
@@ -82,6 +101,11 @@ export default function Header() {
           {t.language}
         </button>
       </nav>
+      {authReady && (authError || logoutError) ? (
+        <p role="alert" className="basis-full text-right text-sm text-red-600">
+          {t.genericError}
+        </p>
+      ) : null}
     </header>
   );
 }

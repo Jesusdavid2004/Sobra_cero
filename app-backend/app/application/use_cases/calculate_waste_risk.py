@@ -3,8 +3,8 @@ from datetime import date, datetime, timedelta, timezone
 from app.application.dto import WasteRiskResult
 from app.application.ports import AIProvider, PredictionModel, SalesHistoryRepository
 from app.domain.exceptions import InsufficientSalesHistoryError
+from app.domain.rules import MIN_HISTORY_DAYS
 
-MINIMUM_HISTORY_DAYS = 14
 HISTORY_LOOKBACK_DAYS = 90
 RECOMMENDATION_PROMPT = (
     "You are a waste-reduction advisor for a {business_type}. The product "
@@ -45,9 +45,9 @@ class CalculateWasteRiskUseCase:
         history = self._repository.list_for_product(
             product_id, calculation_date - timedelta(days=HISTORY_LOOKBACK_DAYS - 1)
         )
-        if len(history) < MINIMUM_HISTORY_DAYS:
+        if len(history) < MIN_HISTORY_DAYS:
             raise InsufficientSalesHistoryError(
-                f"At least {MINIMUM_HISTORY_DAYS} daily sales records are required for this product"
+                f"At least {MIN_HISTORY_DAYS} daily sales records are required for this product"
             )
 
         estimate = self._prediction_model.predict(history, current_stock, days_remaining, calculation_date)
