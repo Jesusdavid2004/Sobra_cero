@@ -1,11 +1,11 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
 
-import Header from "../../components/Header";
-import { api, type Lot, type Promotion } from "../../lib/api";
-import { useApp } from "../../providers/AppProviders";
+import Header from "@/components/Header";
+import { api, type Lot, type Promotion } from "@/lib/api";
+import { useApp } from "@/providers/AppProviders";
 
 export default function LotsPage() {
   const { t, lang } = useApp();

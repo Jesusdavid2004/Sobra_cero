@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { Link } from "@/i18n/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import Header from "../../components/Header";
-import { ApiError, api, type Product, type Shop, type WasteRisk } from "../../lib/api";
-import { useApp } from "../../providers/AppProviders";
+import Header from "@/components/Header";
+import { ApiError, api, type Product, type Shop, type WasteRisk } from "@/lib/api";
+import { useApp } from "@/providers/AppProviders";
 
 export default function ShopPage() {
   const { t, token, lang, user } = useApp();

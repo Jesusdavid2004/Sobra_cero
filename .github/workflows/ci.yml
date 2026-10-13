@@ -17,14 +17,26 @@ jobs:
       - run: black --check app-backend/app app-backend/tests
       - run: isort --check-only app-backend/app app-backend/tests
       - run: flake8 --max-line-length=120 --extend-ignore=E203,W503 app-backend/app app-backend/tests
-      - run: mypy --config-file app-backend/pyproject.toml app-backend/app
+      - run: mypy --config-file app-backend/pyproject.toml app-backend/app/domain app-backend/app/application
   frontend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm, cache-dependency-path: app-frontend/package-lock.json }
-      - run: npm install
+      - run: npm ci
+        working-directory: app-frontend
+      - run: npm run lint
+        working-directory: app-frontend
+      - run: npm run typecheck
+        working-directory: app-frontend
+      - run: npm run i18n:check
+        working-directory: app-frontend
+      - run: npm test
+        working-directory: app-frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: app-frontend
+      - run: npm run e2e
         working-directory: app-frontend
       - run: npm run build
         working-directory: app-frontend

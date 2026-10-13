@@ -1,11 +1,12 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
+import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-import Header from "../../../components/Header";
-import { ApiError, api, type Lot, type Promotion } from "../../../lib/api";
-import { useApp } from "../../../providers/AppProviders";
+import Header from "@/components/Header";
+import { ApiError, api, type Lot, type Promotion } from "@/lib/api";
+import { useApp } from "@/providers/AppProviders";
 
 export default function LotDetailPage() {
   const { t, token, lang, user } = useApp();

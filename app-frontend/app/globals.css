@@ -11,6 +11,11 @@ html {
   background: #f5f3ee;
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: #0c0a09;
+}
+
 body {
   @apply m-0 bg-stone-50 text-stone-900 antialiased;
 }

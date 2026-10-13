@@ -1,12 +1,13 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
+import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 
-import Header from "../../../components/Header";
-import { api, type Product, type Shop } from "../../../lib/api";
-import { compressImage } from "../../../lib/image";
-import { useApp } from "../../../providers/AppProviders";
+import Header from "@/components/Header";
+import { api, type Product, type Shop } from "@/lib/api";
+import { compressImage } from "@/lib/image";
+import { useApp } from "@/providers/AppProviders";
 
 export default function NewLotPage() {
   return (

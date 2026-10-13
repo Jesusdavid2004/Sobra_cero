@@ -26,6 +26,22 @@ For a no-Docker backend test run, create a Python 3.12 virtual environment, inst
 
 The public listing supports `expires_in`, `min_discount`, `category`, `business_type`, and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
 
+## Frontend localization and checks
+
+The storefront uses locale-prefixed routes (`/en` and `/es`). The first visit
+uses the browser language when supported, and the selected locale is retained
+by the locale cookie. The theme follows the operating system by default; the
+theme control cycles through system, light, and dark modes and persists the
+selection.
+
+From `app-frontend`, run `npm run i18n:check`, `npm run typecheck`,
+`npm test`, `npm run e2e`, `npm run lint`, `npm run format:check`, and
+`npm run build` to run the frontend validation suite. Playwright installs
+Chromium with `npx playwright install chromium` if it is not already present.
+The PowerShell smoke path can be run with `.\scripts\smoke.ps1` after
+`docker compose up --build`; it creates unique test accounts, a shop, product,
+lot, and customer reservation in the local database.
+
 ## Waste-risk workflow
 
 Business accounts can load deterministic, synthetic 60-day sales history from **Dashboard → Load 60 days of sample data**. The backend keeps that history private to the shop owner and uses it to calculate an explainable, weekday-adjusted waste-risk score for each active lot. The dashboard displays estimated unsold units and an English or Spanish recommendation.

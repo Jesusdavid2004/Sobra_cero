@@ -1,11 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 import { useEffect, useState } from "react";
 
-import Header from "../../components/Header";
-import { api, type Forecast, type Report, type Shop } from "../../lib/api";
-import { useApp } from "../../providers/AppProviders";
+import Header from "@/components/Header";
+import { api, type Forecast, type Report, type Shop } from "@/lib/api";
+import { useApp } from "@/providers/AppProviders";
 
 export default function AdminPage() {
   const { t, token } = useApp();
