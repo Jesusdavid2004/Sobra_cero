@@ -1,13 +1,13 @@
 # SobraCero MVP
 
-SobraCero is a food-rescue marketplace: shops publish lots close to expiry and neighbors reserve or donate them. The repository is a two-application monorepo with FastAPI, SQLAlchemy, Celery, Redis, PostgreSQL, LocalStack (S3-compatible storage), Next.js and Tailwind.
+SobraCero is a food-rescue marketplace: shops publish lots close to expiry and neighbors reserve or donate them. This repository contains the backend (FastAPI, SQLAlchemy, Celery, Redis, PostgreSQL, LocalStack for S3-compatible storage). The Next.js/Tailwind frontend is in a separate repository, [Sobra_cero_fronent](https://github.com/Jesusdavid2004/Sobra_cero_fronent).
 
 ## Run locally
 
 1. Copy `.env.example` to `.env` (secrets stay local, never committed).
 2. Run `docker compose up --build`.
 3. In another terminal run `docker compose exec backend python seed_data.py`.
-4. Open `http://localhost:3000/en` and API documentation at `http://localhost:8000/docs`.
+4. Open API documentation at `http://localhost:8000/docs`. For the web UI, run the frontend repository (see below) and open `http://localhost:3000/en`.
 
 > Note: PostgreSQL is published on host port **5433** to avoid clashing with a local PostgreSQL service. The local S3 endpoint is `http://localhost:4566` (LocalStack).
 
@@ -44,18 +44,15 @@ development only; never commit `.env`.
 
 The public listing supports `expires_in`, `min_discount`, `category`, `business_type`, and a geographic bounding box (`lat_min`, `lat_max`, `lng_min`, `lng_max`).
 
-## Frontend localization and checks
+## Frontend (separate repository)
 
-The storefront uses locale-prefixed routes (`/en` and `/es`). The first visit
-uses the browser language when supported, and the selected locale is retained
-by the locale cookie. The theme follows the operating system by default; the
-theme control cycles through system, light, and dark modes and persists the
-selection.
+The Next.js frontend lives in
+[Sobra_cero_fronent](https://github.com/Jesusdavid2004/Sobra_cero_fronent).
+Clone it, run `npm ci` and `npm run dev` (it expects this API at
+`http://localhost:8000/api/v1` and is served at `http://localhost:3000/en`).
+`CORS_ORIGINS` must include the frontend origin. Its lint, type-check, i18n,
+unit, e2e, and build checks run in that repository's CI.
 
-From `app-frontend`, run `npm run i18n:check`, `npm run typecheck`,
-`npm test`, `npm run e2e`, `npm run lint`, `npm run format:check`, and
-`npm run build` to run the frontend validation suite. Playwright installs
-Chromium with `npx playwright install chromium` if it is not already present.
 The PowerShell smoke path can be run with `.\scripts\smoke.ps1` after
 `docker compose up --build`; it creates unique test accounts, a shop, product,
 lot, and customer reservation in the local database.
@@ -134,7 +131,7 @@ metadata before private storage or provider use.
 
 ## Quality and scope notes
 
-- CI runs backend tests with at least 70% coverage for domain/application, plus `black`, `isort`, `flake8` and `mypy`; the frontend runs `eslint`, `prettier` and `next build`.
+- CI runs backend tests with at least 70% coverage for domain/application, plus `black`, `isort`, `flake8` and `mypy`; frontend checks run in the frontend repository.
 - In-memory sliding-window rate limits protect reservations, image uploads, promo generation, expiry scans, model training, and pickup confirmation. These limits are per-process and must be supplemented by a distributed edge limiter in a multi-replica production deployment.
 - Reservations atomically consume lot stock; customers can cancel active reservations and the owning shop can confirm pickup with its code. Celery Beat expires lots and their outstanding reservations every minute (`docker compose up scheduler`).
 - Alembic is the source of truth for the database schema. The API and both backend data scripts apply pending migrations before accessing the database.

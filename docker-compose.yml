@@ -44,12 +44,6 @@ services:
       DATABASE_URL: ******postgres:5432/sobracero
       REDIS_URL: redis://redis:6379/0
     depends_on: [postgres, redis]
-  frontend:
-    build: ./app-frontend
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
-    ports: ["3000:3000"]
-    depends_on: [backend]
 volumes:
   postgres_data:
   localstack_data:

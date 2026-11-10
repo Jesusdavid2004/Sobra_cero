@@ -16,7 +16,8 @@ Invoke-WebRequest http://localhost:8000/ready
 Open the application at `http://localhost:3000/en` or `http://localhost:3000/es`,
 API documentation at `http://localhost:8000/docs`, and PostgreSQL at host port
 5433. The Compose stack starts PostgreSQL, Redis, LocalStack, API, Celery
-worker, Celery scheduler, and frontend. The API applies Alembic migrations on
+worker, and Celery scheduler; the Next.js frontend runs from its own repository
+(`Sobra_cero_fronent`, `npm ci && npm run dev`). The API applies Alembic migrations on
 startup. The demo account is documented in the root README and must remain
 development-only.
 

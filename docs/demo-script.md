@@ -35,7 +35,7 @@
 
 ## Automated browser coverage
 
-`app-frontend/e2e/publish-to-pickup.spec.ts` exercises lot publication,
+`e2e/publish-to-pickup.spec.ts` in the frontend repository (`Sobra_cero_fronent`) exercises lot publication,
 customer reservation, shop pickup confirmation, and locale/theme changes with
 a deterministic mocked API. It validates frontend behavior without requiring
 live database, object-storage, or AI services. Backend authorization and
