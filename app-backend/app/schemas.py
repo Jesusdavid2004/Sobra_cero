@@ -1,7 +1,14 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.domain.rules import MAX_DISCOUNT_PERCENT
 
@@ -74,6 +81,17 @@ class LotCreate(BaseModel):
     original_price_cents: int = Field(ge=0)
     discount_percent: int = Field(ge=0, le=MAX_DISCOUNT_PERCENT)
     expires_at: datetime
+    pickup_ends_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def pickup_must_not_exceed_expiry(self) -> "LotCreate":
+        if self.pickup_ends_at is None:
+            return self
+        pickup = self.pickup_ends_at if self.pickup_ends_at.tzinfo else self.pickup_ends_at.replace(tzinfo=timezone.utc)
+        expiry = self.expires_at if self.expires_at.tzinfo else self.expires_at.replace(tzinfo=timezone.utc)
+        if pickup > expiry:
+            raise ValueError("pickup_ends_at must not be after expires_at")
+        return self
 
 
 class LotOut(BaseModel):
@@ -87,6 +105,7 @@ class LotOut(BaseModel):
     original_price_cents: int = Field(ge=0)
     discount_percent: int = Field(ge=0, le=MAX_DISCOUNT_PERCENT)
     expires_at: datetime
+    pickup_ends_at: datetime | None = None
     status: Literal["draft", "active", "sold_out", "expired", "donated", "cancelled"] = "active"
     image_url: str | None = None
     category: str = "other"

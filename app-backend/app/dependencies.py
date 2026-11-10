@@ -15,6 +15,11 @@ from app.application.use_cases.auth import (
 )
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
+from app.application.use_cases.rescue_plan import (
+    DecideRescuePlan,
+    GenerateRescuePlan,
+    ListRescuePlans,
+)
 from app.application.use_cases.train_sales_forecast_model import TrainSalesForecastModel
 from app.auth import password_hasher
 from app.config import settings
@@ -29,6 +34,11 @@ from app.infrastructure.prediction.weekday_sales_forecast import (
 )
 from app.infrastructure.prediction.weighted_moving_average import (
     WeightedMovingAveragePredictionModel,
+)
+from app.infrastructure.repositories.rescue_plan_repository import (
+    SqlAlchemyRescueLotGateway,
+    SqlAlchemyRescuePlanRepository,
+    SqlAlchemyUnitOfWork,
 )
 from app.infrastructure.repositories.sales_forecast_model_repository import (
     SqlAlchemySalesForecastModelRepository,
@@ -94,6 +104,31 @@ def build_calculate_waste_risk_use_case(db: Session) -> CalculateWasteRiskUseCas
 
 def build_sales_history_repository(db: Session) -> PostgresSalesHistoryRepository:
     return PostgresSalesHistoryRepository(db)
+
+
+def build_generate_rescue_plan_use_case(db: Session) -> GenerateRescuePlan:
+    artifact = build_sales_forecast_model_repository(db).get_active_model()
+    return GenerateRescuePlan(
+        lots=SqlAlchemyRescueLotGateway(db),
+        plans=SqlAlchemyRescuePlanRepository(db),
+        history=build_sales_history_repository(db),
+        prediction_model=(
+            WeekdaySalesForecastModel(artifact) if artifact is not None else WeightedMovingAveragePredictionModel()
+        ),
+        unit_of_work=SqlAlchemyUnitOfWork(db),
+    )
+
+
+def build_decide_rescue_plan_use_case(db: Session) -> DecideRescuePlan:
+    return DecideRescuePlan(
+        lots=SqlAlchemyRescueLotGateway(db),
+        plans=SqlAlchemyRescuePlanRepository(db),
+        unit_of_work=SqlAlchemyUnitOfWork(db),
+    )
+
+
+def build_list_rescue_plans_use_case(db: Session) -> ListRescuePlans:
+    return ListRescuePlans(SqlAlchemyRescueLotGateway(db), SqlAlchemyRescuePlanRepository(db))
 
 
 def build_import_sales_history_csv_use_case(db: Session) -> ImportSalesHistoryCsv:

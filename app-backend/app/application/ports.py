@@ -1,17 +1,19 @@
-from datetime import date
-from typing import Protocol, Sequence, TypeVar
+from datetime import date, datetime
+from typing import Mapping, Protocol, Sequence, TypeVar
 
 from pydantic import BaseModel
 
 from app.application.dto import (
     AuthUser,
     DailySales,
+    LotSnapshot,
     PredictionEstimate,
     SalesForecastEvaluation,
     SalesForecastModelArtifact,
     SessionTokens,
     UserRole,
 )
+from app.domain.rescue import RescuePlan, RescuePlanStatus
 
 
 class SalesHistoryRepository(Protocol):
@@ -98,3 +100,33 @@ class RefreshTokenStore(Protocol):
     def rotate(self, old_token_id: str, new_token_id: str, user_id: int, ttl_seconds: int) -> bool: ...
 
     def revoke(self, token_id: str, user_id: int) -> None: ...
+
+
+class UnitOfWork(Protocol):
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
+class RescueLotGateway(Protocol):
+    def get_snapshot(self, lot_id: int) -> LotSnapshot | None: ...
+
+    def get_shop_owner_id(self, shop_id: int) -> int | None: ...
+
+    def apply_discount_if_unchanged(self, lot_id: int, expected_quantity: int, discount_percent: int) -> bool: ...
+
+
+class RescuePlanRepository(Protocol):
+    def add(self, plan: RescuePlan) -> RescuePlan: ...
+
+    def get(self, plan_id: int) -> RescuePlan | None: ...
+
+    def list_for_shop(self, shop_id: int, status: RescuePlanStatus | None) -> list[RescuePlan]: ...
+
+    def supersede_pending_for_lot(self, lot_id: int) -> list[int]: ...
+
+    def mark_decided(self, plan_id: int, status: RescuePlanStatus, actor_id: int, now: datetime) -> bool: ...
+
+    def record_event(
+        self, plan_id: int, event_type: str, actor_id: int | None, payload: Mapping[str, object]
+    ) -> None: ...

@@ -72,3 +72,31 @@ class AIQuotaExceededError(Exception):
 
 class InvalidImageError(ValueError):
     """Raised when an uploaded image is corrupt or outside supported image limits."""
+
+
+class RescuePermissionError(Exception):
+    """Raised when the actor's role cannot use rescue plans."""
+
+
+class RescueLotNotFoundError(Exception):
+    """Raised when a lot does not exist or is not visible to the actor."""
+
+
+class RescuePlanNotFoundError(Exception):
+    """Raised when a rescue plan does not exist or is not visible to the actor."""
+
+
+class LotNotRescuableError(Exception):
+    """Raised when a lot is inactive, empty, or past its operating deadline."""
+
+
+class RescuePlanStaleError(Exception):
+    """Raised when the lot changed after a rescue plan was generated."""
+
+
+class InvalidRescuePlanTransitionError(Exception):
+    """Raised when a rescue plan decision conflicts with its current status."""
+
+
+class RescuePlanConflictError(Exception):
+    """Raised when a concurrent request already created a pending rescue plan."""

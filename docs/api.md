@@ -61,6 +61,27 @@ The shop confirms collection from the dashboard. Pickup confirmation is
 limited to five requests per minute per client IP and is checked against the
 owning shop and code.
 
+## Rescue plans
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/lots/{lot_id}/rescue-plan` | Generate a plan for an owned lot (replaces any pending plan). Deterministic rules, no AI. |
+| `GET` | `/api/v1/shops/{shop_id}/rescue-plans` | List a shop's plans; optional `status` filter. |
+| `POST` | `/api/v1/rescue-plans/{plan_id}/approve` | Approve; applies a discount plan in the same transaction. Repeating it is a no-op. |
+| `POST` | `/api/v1/rescue-plans/{plan_id}/reject` | Reject a pending plan. |
+
+A plan reports `action` (`keep_offer`, `apply_discount_rule`,
+`prepare_donation_offer`, `insufficient_history`), stable `reasons` codes for
+the frontend to translate, the quantities used, `rule_version` and
+`model_version`. The horizon is the earlier of the lot's `expires_at` and its
+optional `pickup_ends_at`. With fewer than 14 days of sales history the plan is
+`not_actionable` and carries no numbers. The surplus ladder (>= 50 % donation
+preparation, 20-50 % one 10-point discount step, otherwise keep) is a
+configurable heuristic, not a trained price-response model. Approving a
+donation plan records the approval only; stock is not moved. Approval fails
+with `rescue_plan_stale` if the lot's stock changed after generation. Every
+step is stored in `rescue_plan_events`. Errors use `{ code, message_key }`.
+
 ## AI, image review, and administration
 
 | Method | Path | Purpose |

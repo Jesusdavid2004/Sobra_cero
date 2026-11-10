@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
 
 from app.domain.value_objects import RiskScore
@@ -78,3 +78,27 @@ class AuthUser:
 class SessionTokens:
     access_token: str
     refresh_token: str
+
+
+@dataclass(frozen=True)
+class Actor:
+    user_id: int
+    role: UserRole
+    is_admin: bool
+
+    @property
+    def can_manage_shops(self) -> bool:
+        return self.role == "business" or self.is_admin
+
+
+@dataclass(frozen=True)
+class LotSnapshot:
+    lot_id: int
+    shop_id: int
+    owner_id: int
+    product_id: int
+    quantity: int
+    discount_percent: int
+    status: str
+    expires_at: datetime
+    pickup_ends_at: datetime | None

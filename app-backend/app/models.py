@@ -78,6 +78,7 @@ class Lot(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     image_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    pickup_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(
         String(20), default=BatchStatus.ACTIVE.value, server_default=BatchStatus.ACTIVE.value, index=True
     )
@@ -187,6 +188,58 @@ class WastePrediction(Base):
     recommendation: Mapped[str] = mapped_column(Text)
     model_version: Mapped[str] = mapped_column(String(100), default="legacy", server_default="legacy")
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class RescuePlanRecord(Base):
+    __tablename__ = "rescue_plans"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending_approval', 'approved', 'rejected', 'superseded', 'not_actionable')",
+            name="ck_rescue_plans_status",
+        ),
+        CheckConstraint(
+            "action IN ('keep_offer', 'apply_discount_rule', 'prepare_donation_offer', 'insufficient_history')",
+            name="ck_rescue_plans_action",
+        ),
+        Index(
+            "uq_rescue_plans_pending_lot",
+            "lot_id",
+            unique=True,
+            sqlite_where=text("status = 'pending_approval'"),
+            postgresql_where=text("status = 'pending_approval'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"), index=True)
+    shop_id: Mapped[int] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(20))
+    action: Mapped[str] = mapped_column(String(30))
+    reasons_json: Mapped[str] = mapped_column(Text)
+    available_quantity: Mapped[int] = mapped_column(Integer)
+    expected_sales: Mapped[float | None] = mapped_column(Float, nullable=True)
+    surplus_units: Mapped[float | None] = mapped_column(Float, nullable=True)
+    proposed_discount_percent: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    horizon_hours: Mapped[float] = mapped_column(Float)
+    data_points: Mapped[int] = mapped_column(Integer)
+    rule_version: Mapped[str] = mapped_column(String(40))
+    model_version: Mapped[str] = mapped_column(String(100))
+    inputs_json: Mapped[str] = mapped_column(Text)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    decided_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class RescuePlanEventRecord(Base):
+    __tablename__ = "rescue_plan_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("rescue_plans.id", ondelete="CASCADE"), index=True)
+    event_type: Mapped[str] = mapped_column(String(30))
+    actor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
 
 
 class SalesForecastModel(Base):

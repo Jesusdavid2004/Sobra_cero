@@ -56,7 +56,9 @@ from app.models import (
     Shop,
     User,
 )
+from app.presentation.error_handlers import register_rescue_error_handlers
 from app.presentation.routers.auth import router as auth_router
+from app.presentation.routers.rescue import router as rescue_router
 from app.prompts import EXPIRY_SCAN_PROMPT_VERSION, build_expiry_scan_prompt
 from app.schemas import (
     DonationCreate,
@@ -97,6 +99,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(rescue_router)
+register_rescue_error_handlers(app)
 
 
 @app.exception_handler(InsufficientSalesHistoryError)
