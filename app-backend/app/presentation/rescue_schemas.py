@@ -1,9 +1,32 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.domain.rescue import RescuePlan
+from app.domain.rules import MAX_SIMULATION_DEMAND_UPLIFT_PERCENT
+
+
+class SimulationRequest(BaseModel):
+    demand_uplift_percent: int = Field(default=0, ge=0, le=MAX_SIMULATION_DEMAND_UPLIFT_PERCENT)
+    donation_units: int | None = Field(default=None, ge=0)
+
+
+class ScenarioOut(BaseModel):
+    kind: Literal["keep_offer", "apply_discount", "separate_donation"]
+    discount_percent: int
+    donated_units: int
+    expected_sales: float
+    surplus_units: float
+    estimated_revenue_cents: int
+
+
+class SimulationOut(BaseModel):
+    hypothetical: Literal[True] = True
+    stale: bool
+    demand_uplift_percent: int
+    donation_units: int
+    scenarios: list[ScenarioOut]
 
 
 class RescueExplanationOut(BaseModel):

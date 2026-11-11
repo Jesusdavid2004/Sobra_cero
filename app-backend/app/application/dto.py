@@ -131,3 +131,4 @@ class LotSnapshot:
     status: str
     expires_at: datetime
     pickup_ends_at: datetime | None
+    original_price_cents: int = 0

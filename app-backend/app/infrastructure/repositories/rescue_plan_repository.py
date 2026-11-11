@@ -46,6 +46,7 @@ class SqlAlchemyRescueLotGateway(RescueLotGateway):
             status=lot.status,
             expires_at=lot.expires_at,
             pickup_ends_at=lot.pickup_ends_at,
+            original_price_cents=lot.original_price_cents,
         )
 
     def get_shop_owner_id(self, shop_id: int) -> int | None:

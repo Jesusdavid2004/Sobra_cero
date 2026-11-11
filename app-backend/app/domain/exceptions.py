@@ -102,6 +102,14 @@ class RescuePlanConflictError(Exception):
     """Raised when a concurrent request already created a pending rescue plan."""
 
 
+class SimulationUnavailableError(Exception):
+    """Raised when a plan has no numbers to simulate from."""
+
+
+class SimulationInvalidError(ValueError):
+    """Raised when scenario parameters are outside what the lot allows."""
+
+
 class AnalysisUnavailableError(Exception):
     """Raised when the analysis service is unreachable or exceeds its deadline."""
 

@@ -10,6 +10,7 @@ from app.application.use_cases.rescue_plan import (
     GenerateRescuePlan,
     ListRescuePlans,
 )
+from app.application.use_cases.simulate_rescue_plan import SimulateRescuePlan
 from app.auth import current_user
 from app.db import get_db
 from app.dependencies import (
@@ -17,11 +18,18 @@ from app.dependencies import (
     build_explain_rescue_plan_use_case,
     build_generate_rescue_plan_use_case,
     build_list_rescue_plans_use_case,
+    build_simulate_rescue_plan_use_case,
 )
 from app.domain.rescue import RescuePlanStatus
 from app.infrastructure.realtime.notifier import notify_lot_changed
 from app.models import User
-from app.presentation.rescue_schemas import RescueExplanationOut, RescuePlanOut
+from app.presentation.rescue_schemas import (
+    RescueExplanationOut,
+    RescuePlanOut,
+    ScenarioOut,
+    SimulationOut,
+    SimulationRequest,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["rescue-plans"])
 REQUEST_ID_HEADER = "x-request-id"
@@ -84,3 +92,20 @@ def explain_rescue_plan(
 ) -> RescueExplanationOut:
     use_case: ExplainRescuePlan = build_explain_rescue_plan_use_case(db)
     return RescueExplanationOut(text=use_case.execute(plan_id, _actor(user), language))
+
+
+@router.post("/rescue-plans/{plan_id}/simulation", response_model=SimulationOut)
+def simulate_rescue_plan(
+    plan_id: int,
+    body: SimulationRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+) -> SimulationOut:
+    use_case: SimulateRescuePlan = build_simulate_rescue_plan_use_case(db)
+    result = use_case.execute(plan_id, _actor(user), body.demand_uplift_percent, body.donation_units)
+    return SimulationOut(
+        stale=result.stale,
+        demand_uplift_percent=result.demand_uplift_percent,
+        donation_units=result.donation_units,
+        scenarios=[ScenarioOut(**{**scenario.__dict__, "kind": scenario.kind.value}) for scenario in result.scenarios],
+    )

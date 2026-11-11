@@ -22,6 +22,7 @@ from app.application.use_cases.rescue_plan import (
     ListRescuePlans,
 )
 from app.application.use_cases.shop_impact import GetShopImpact
+from app.application.use_cases.simulate_rescue_plan import SimulateRescuePlan
 from app.application.use_cases.train_sales_forecast_model import TrainSalesForecastModel
 from app.auth import password_hasher
 from app.config import settings
@@ -156,6 +157,10 @@ def get_lot_event_publisher() -> LotEventPublisher:
     if settings.realtime_broker == "redis":
         return RedisLotEventPublisher(Redis.from_url(settings.redis_url))
     return InMemoryLotEventPublisher(get_lot_stream_hub())
+
+
+def build_simulate_rescue_plan_use_case(db: Session) -> SimulateRescuePlan:
+    return SimulateRescuePlan(SqlAlchemyRescueLotGateway(db), SqlAlchemyRescuePlanRepository(db))
 
 
 def build_get_shop_impact_use_case(db: Session) -> GetShopImpact:
