@@ -102,7 +102,7 @@ def _claim_active_reservation(db: Session, reservation_id: int, target: Reservat
         update(Reservation)
         .where(Reservation.id == reservation_id, Reservation.status == ReservationStatus.RESERVED.value)
         .execution_options(synchronize_session=False)
-        .values(status=target.value)
+        .values(status=target.value, status_changed_at=datetime.now(timezone.utc))
     )
     if claimed.rowcount != 1:
         db.rollback()
@@ -169,7 +169,7 @@ def cancel_lot(db: Session, lot_id: int) -> Lot:
             Reservation.status == ReservationStatus.RESERVED.value,
         )
         .execution_options(synchronize_session=False)
-        .values(status=ReservationStatus.CANCELLED.value)
+        .values(status=ReservationStatus.CANCELLED.value, status_changed_at=datetime.now(timezone.utc))
     )
     db.commit()
     lot = db.get(Lot, lot_id)
@@ -275,7 +275,7 @@ def expire_due_lots(db: Session, now: datetime | None = None) -> int:
             Reservation.status == ReservationStatus.RESERVED.value,
             Reservation.lot_id.in_(select(Lot.id).where(Lot.expires_at <= current_time)),
         )
-        .values(status=ReservationStatus.EXPIRED.value)
+        .values(status=ReservationStatus.EXPIRED.value, status_changed_at=current_time)
     )
     db.commit()
     for lot_id in due_lot_ids:

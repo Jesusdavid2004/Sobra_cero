@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.application.dto import Actor
 from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
+from app.application.use_cases.lot_timeline import GetLotTimeline
 from app.application.use_cases.rescue_plan import (
     DecideRescuePlan,
     GenerateRescuePlan,
@@ -17,6 +18,7 @@ from app.dependencies import (
     build_decide_rescue_plan_use_case,
     build_explain_rescue_plan_use_case,
     build_generate_rescue_plan_use_case,
+    build_get_lot_timeline_use_case,
     build_list_rescue_plans_use_case,
     build_simulate_rescue_plan_use_case,
 )
@@ -29,6 +31,7 @@ from app.presentation.rescue_schemas import (
     ScenarioOut,
     SimulationOut,
     SimulationRequest,
+    TimelineEventOut,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["rescue-plans"])
@@ -109,3 +112,12 @@ def simulate_rescue_plan(
         donation_units=result.donation_units,
         scenarios=[ScenarioOut(**{**scenario.__dict__, "kind": scenario.kind.value}) for scenario in result.scenarios],
     )
+
+
+@router.get("/lots/{lot_id}/timeline", response_model=list[TimelineEventOut])
+def get_lot_timeline(
+    lot_id: int, db: Session = Depends(get_db), user: User = Depends(current_user)
+) -> list[TimelineEventOut]:
+    use_case: GetLotTimeline = build_get_lot_timeline_use_case(db)
+    events = use_case.execute(lot_id, _actor(user))
+    return [TimelineEventOut(**{**event.__dict__, "kind": event.kind.value}) for event in events]

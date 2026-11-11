@@ -16,6 +16,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
 from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
+from app.application.use_cases.lot_timeline import GetLotTimeline
 from app.application.use_cases.rescue_plan import (
     DecideRescuePlan,
     GenerateRescuePlan,
@@ -60,6 +61,9 @@ from app.infrastructure.repositories.sales_forecast_model_repository import (
 )
 from app.infrastructure.repositories.sales_history_repository import (
     PostgresSalesHistoryRepository,
+)
+from app.infrastructure.repositories.timeline_repository import (
+    SqlAlchemyLotTimelineSource,
 )
 from app.infrastructure.repositories.user_repository import SqlAlchemyAuthUserRepository
 from app.llm import build_client
@@ -161,6 +165,10 @@ def get_lot_event_publisher() -> LotEventPublisher:
 
 def build_simulate_rescue_plan_use_case(db: Session) -> SimulateRescuePlan:
     return SimulateRescuePlan(SqlAlchemyRescueLotGateway(db), SqlAlchemyRescuePlanRepository(db))
+
+
+def build_get_lot_timeline_use_case(db: Session) -> GetLotTimeline:
+    return GetLotTimeline(SqlAlchemyRescueLotGateway(db), SqlAlchemyLotTimelineSource(db))
 
 
 def build_get_shop_impact_use_case(db: Session) -> GetShopImpact:

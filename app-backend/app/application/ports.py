@@ -18,6 +18,7 @@ from app.application.dto import (
 from app.domain.events import LotStockChanged
 from app.domain.impact import ReservationOutcome
 from app.domain.rescue import RescuePlan, RescuePlanStatus
+from app.domain.timeline import DonationRow, PlanEventRow, ReservationRow
 
 
 class SalesHistoryRepository(Protocol):
@@ -76,6 +77,14 @@ class AIProvider(Protocol):
         image_mime_type: str | None = None,
         model_tier: str = "fast",
     ) -> AIOutput: ...
+
+
+class LotTimelineSource(Protocol):
+    def plan_events(self, lot_id: int) -> list[PlanEventRow]: ...
+
+    def reservations(self, lot_id: int) -> list[ReservationRow]: ...
+
+    def donations(self, lot_id: int) -> list[DonationRow]: ...
 
 
 class ImpactRepository(Protocol):

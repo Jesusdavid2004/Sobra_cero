@@ -52,7 +52,10 @@ def test_upgrade_creates_the_complete_schema_from_an_empty_database(tmp_path: Pa
     assert "model_version" in {column["name"] for column in inspector.get_columns("waste_predictions")}
     with engine.connect() as connection:
         assert "version" in {column["name"] for column in inspector.get_columns("lots")}
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0008_lot_version"
+        assert "status_changed_at" in {column["name"] for column in inspector.get_columns("reservations")}
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009_reservation_status_changed_at"
+        )
     assert "pickup_ends_at" in {column["name"] for column in inspector.get_columns("lots")}
     assert "uq_rescue_plans_pending_lot" in {index["name"] for index in inspector.get_indexes("rescue_plans")}
     assert {"status", "image_key"} <= {column["name"] for column in inspector.get_columns("lots")}

@@ -121,6 +121,7 @@ class Reservation(Base):
         String(20), default=ReservationStatus.RESERVED.value, server_default=ReservationStatus.RESERVED.value
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    status_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ExpiryScanSuggestion(Base):

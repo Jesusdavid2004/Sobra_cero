@@ -7,6 +7,14 @@ from app.domain.rescue import RescuePlan
 from app.domain.rules import MAX_SIMULATION_DEMAND_UPLIFT_PERCENT
 
 
+class TimelineEventOut(BaseModel):
+    kind: str
+    occurred_at: datetime
+    plan_id: int | None
+    units: int | None
+    discount_percent: int | None
+
+
 class SimulationRequest(BaseModel):
     demand_uplift_percent: int = Field(default=0, ge=0, le=MAX_SIMULATION_DEMAND_UPLIFT_PERCENT)
     donation_units: int | None = Field(default=None, ge=0)
