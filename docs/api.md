@@ -69,6 +69,9 @@ owning shop and code.
 | `GET` | `/api/v1/shops/{shop_id}/rescue-plans` | List a shop's plans; optional `status` filter. |
 | `POST` | `/api/v1/rescue-plans/{plan_id}/approve` | Approve; applies a discount plan in the same transaction. Repeating it is a no-op. |
 | `POST` | `/api/v1/rescue-plans/{plan_id}/reject` | Reject a pending plan. |
+| `POST` | `/api/v1/rescue-plans/{plan_id}/explanation?language=en|es` | Reword the plan's reasons in plain language with the configured AI provider. Owner or admin only. |
+
+The explanation endpoint sends only the suggested action and the stable reason descriptions to the model, never quantities, prices or shop data. The response is rejected and retried once if it contains any digit, so numbers and decisions always come from the deterministic rule. Nothing is stored; if the provider fails the endpoint returns `503 ai_provider_unavailable` or `502 ai_response_invalid` and the plan stays usable. The daily AI quota applies.
 
 A plan reports `action` (`keep_offer`, `apply_discount_rule`,
 `prepare_donation_offer`, `insufficient_history`), stable `reasons` codes for
@@ -81,6 +84,19 @@ configurable heuristic, not a trained price-response model. Approving a
 donation plan records the approval only; stock is not moved. Approval fails
 with `rescue_plan_stale` if the lot's stock changed after generation. Every
 step is stored in `rescue_plan_events`. Errors use `{ code, message_key }`.
+
+## Rescue analysis service (gRPC)
+
+Plan generation calls a separate stateless gRPC service when
+`ANALYSIS_GRPC_TARGET` is set; otherwise it analyzes in-process. Both give the
+same result (covered by tests that run a real server). The contract is
+`proto/sobracero/analysis/v1/rescue_analysis.proto` (`AnalyzeLot`, `AnalyzeShop`).
+A plan's stored inputs record `analysis_source` (`local`, `grpc` or
+`local_fallback`) and the request id; the `x-request-id` header of the HTTP
+request is forwarded to the service. If the service is unreachable or exceeds
+`ANALYSIS_GRPC_TIMEOUT_SECONDS`, the plan is created locally and an
+`analysis_fallback` event is recorded. A rejected request or bad token returns
+`502 { code: "analysis_failed" }`. See ADR 0007.
 
 ## AI, image review, and administration
 

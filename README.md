@@ -48,7 +48,8 @@ The public listing supports `expires_in`, `min_discount`, `category`, `business_
 
 The Next.js frontend lives in
 [Sobra_cero_fronent](https://github.com/Jesusdavid2004/Sobra_cero_fronent).
-Clone it, run `npm ci` and `npm run dev` (it expects this API at
+Clone it into `app-frontend/` next to this README (that folder is git-ignored here because it is its own
+repository), run `npm ci` and `npm run dev` (it expects this API at
 `http://localhost:8000/api/v1` and is served at `http://localhost:3000/en`).
 `CORS_ORIGINS` must include the frontend origin. Its lint, type-check, i18n,
 unit, e2e, and build checks run in that repository's CI.

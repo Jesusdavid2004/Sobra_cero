@@ -53,11 +53,14 @@ obtaining approval; this is intentionally not part of the normal stop command.
 | `MINIO_BUCKET`, `MINIO_SECURE` | Private image bucket and TLS selection. | `lots`, `false` locally. |
 | `LLM_PROVIDER` | AI adapter selection. | `mock` locally; production rejects mock. |
 | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `LLM_API_KEY` | Provider credentials. | Leave blank for mock; store production values in a secret manager. |
-| `LLM_BASE_URL`, `LLM_MODEL` | OpenAI-compatible provider configuration. | Configure only for selected provider. |
+| `LLM_BASE_URL`, `LLM_MODEL` | OpenAI-compatible provider configuration. | Configure only for selected provider. Groq: `https://api.groq.com/openai/v1` and a model such as `openai/gpt-oss-20b`. |
 | `AI_MODEL_FAST`, `AI_MODEL_SMART` | Anthropic model tiers. | `claude-haiku-5-5`, `claude-sonnet-5-5`. |
 | `AI_MAX_TOKENS`, `AI_TIMEOUT_SECONDS` | Bound provider output and duration. | `512`, `20`. |
 | `AI_DAILY_QUOTA`, `AI_CACHE_TTL_SECONDS` | Per-user request quota and cached result lifetime. | `25`, `900`. |
 | `NEXT_PUBLIC_API_URL` | Browser-visible API base URL compiled into Next.js. | `http://localhost:8000/api/v1`; it must resolve from the user's browser. |
+| `ANALYSIS_GRPC_TARGET` | `host:port` of the rescue analysis gRPC service; empty analyzes in-process. | Compose sets `analysis:50051`. On Railway use the service's private domain. |
+| `ANALYSIS_SHARED_TOKEN` | Token callers send to the analysis service; required when a target is set and for the service itself. | Compose has a development default; set a unique value elsewhere. |
+| `ANALYSIS_GRPC_TIMEOUT_SECONDS` | Per-call deadline before falling back locally. | `2`. |
 
 Never commit `.env` or put credentials in frontend `NEXT_PUBLIC_*` variables.
 Keep `.env.example` free of real secrets.
