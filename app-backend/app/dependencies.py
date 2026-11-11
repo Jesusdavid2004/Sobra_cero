@@ -6,7 +6,7 @@ from fastapi import Depends
 from redis import Redis
 from sqlalchemy.orm import Session
 
-from app.application.ports import RescueAnalyzer, SessionManager
+from app.application.ports import LotEventPublisher, RescueAnalyzer, SessionManager
 from app.application.use_cases.auth import (
     Login,
     LogoutSession,
@@ -41,6 +41,11 @@ from app.infrastructure.prediction.weekday_sales_forecast import (
 )
 from app.infrastructure.prediction.weighted_moving_average import (
     WeightedMovingAveragePredictionModel,
+)
+from app.infrastructure.realtime.hub import LotStreamHub
+from app.infrastructure.realtime.publishers import (
+    InMemoryLotEventPublisher,
+    RedisLotEventPublisher,
 )
 from app.infrastructure.repositories.rescue_plan_repository import (
     SqlAlchemyRescueLotGateway,
@@ -137,6 +142,18 @@ def build_rescue_analyzer() -> RescueAnalyzer:
     if not settings.analysis_grpc_target:
         return local
     return FallbackRescueAnalyzer(get_grpc_rescue_analyzer(), local)
+
+
+@lru_cache(maxsize=1)
+def get_lot_stream_hub() -> LotStreamHub:
+    return LotStreamHub()
+
+
+@lru_cache(maxsize=1)
+def get_lot_event_publisher() -> LotEventPublisher:
+    if settings.realtime_broker == "redis":
+        return RedisLotEventPublisher(Redis.from_url(settings.redis_url))
+    return InMemoryLotEventPublisher(get_lot_stream_hub())
 
 
 def build_explain_rescue_plan_use_case(db: Session) -> ExplainRescuePlan:

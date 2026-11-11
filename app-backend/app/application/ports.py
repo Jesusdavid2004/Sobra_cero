@@ -15,6 +15,7 @@ from app.application.dto import (
     SessionTokens,
     UserRole,
 )
+from app.domain.events import LotStockChanged
 from app.domain.rescue import RescuePlan, RescuePlanStatus
 
 
@@ -74,6 +75,10 @@ class AIProvider(Protocol):
         image_mime_type: str | None = None,
         model_tier: str = "fast",
     ) -> AIOutput: ...
+
+
+class LotEventPublisher(Protocol):
+    def publish(self, event: LotStockChanged) -> None: ...
 
 
 class AuthUserRepository(Protocol):

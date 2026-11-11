@@ -59,7 +59,7 @@ class SqlAlchemyRescueLotGateway(RescueLotGateway):
                 Lot.quantity == expected_quantity,
                 Lot.status == BatchStatus.ACTIVE.value,
             )
-            .values(discount_percent=discount_percent)
+            .values(discount_percent=discount_percent, version=Lot.version + 1)
         )
         return result.rowcount == 1
 

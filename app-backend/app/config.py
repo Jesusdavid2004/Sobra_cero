@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     ai_daily_quota: int = Field(default=25, gt=0)
     ai_cache_ttl_seconds: int = Field(default=900, gt=0)
 
+    realtime_broker: Literal["memory", "redis"] = "memory"
+    realtime_max_subscriptions: int = Field(default=20, gt=0)
+    realtime_max_message_bytes: int = Field(default=2048, gt=0)
+    realtime_messages_per_window: int = Field(default=30, gt=0)
+
     analysis_grpc_target: str | None = None
     analysis_grpc_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
     analysis_shared_token: str | None = None

@@ -19,6 +19,7 @@ from app.dependencies import (
     build_list_rescue_plans_use_case,
 )
 from app.domain.rescue import RescuePlanStatus
+from app.infrastructure.realtime.notifier import notify_lot_changed
 from app.models import User
 from app.presentation.rescue_schemas import RescueExplanationOut, RescuePlanOut
 
@@ -55,7 +56,9 @@ def list_rescue_plans(
 
 def _decide(plan_id: int, decision: Literal["approve", "reject"], db: Session, user: User) -> RescuePlanOut:
     use_case: DecideRescuePlan = build_decide_rescue_plan_use_case(db)
-    return RescuePlanOut.from_entity(use_case.execute(plan_id, _actor(user), decision))
+    plan = use_case.execute(plan_id, _actor(user), decision)
+    notify_lot_changed(db, plan.lot_id)
+    return RescuePlanOut.from_entity(plan)
 
 
 @router.post("/rescue-plans/{plan_id}/approve", response_model=RescuePlanOut)

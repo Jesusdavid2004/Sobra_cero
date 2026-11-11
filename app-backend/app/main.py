@@ -1,6 +1,8 @@
+import asyncio
 import time
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from datetime import datetime
 from datetime import time as datetime_time
 from datetime import timedelta, timezone
@@ -26,6 +28,7 @@ from app.dependencies import (
     build_import_sales_history_csv_use_case,
     build_sales_history_repository,
     build_train_sales_forecast_model_use_case,
+    get_lot_stream_hub,
     get_redis_client,
 )
 from app.domain.exceptions import (
@@ -44,6 +47,7 @@ from app.domain.rules import (
     MAX_SALES_HISTORY_IMPORT_BYTES,
     MIN_EXPIRY_OCR_CONFIDENCE,
 )
+from app.infrastructure.realtime.publishers import listen_for_lot_events
 from app.llm import build_client
 from app.migrations import upgrade_database_schema
 from app.models import (
@@ -58,6 +62,7 @@ from app.models import (
 )
 from app.presentation.error_handlers import register_rescue_error_handlers
 from app.presentation.routers.auth import router as auth_router
+from app.presentation.routers.realtime import router as realtime_router
 from app.presentation.routers.rescue import router as rescue_router
 from app.prompts import EXPIRY_SCAN_PROMPT_VERSION, build_expiry_scan_prompt
 from app.schemas import (
@@ -90,7 +95,22 @@ from app.synthetic_sales import DEFAULT_HISTORY_DAYS, generate_shop_sales_histor
 from app.worker import generate_promotions_task
 
 upgrade_database_schema(engine.url)
-app = FastAPI(title="SobraCero API", version="0.2.0")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Bridge Redis Pub/Sub to this process's WebSocket connections when Redis is the broker."""
+    listener = None
+    if settings.realtime_broker == "redis":
+        hub = get_lot_stream_hub()
+        hub.bind_loop(asyncio.get_running_loop())
+        listener = asyncio.create_task(listen_for_lot_events(settings.redis_url, hub))
+    yield
+    if listener is not None:
+        listener.cancel()
+
+
+app = FastAPI(title="SobraCero API", version="0.2.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()],
@@ -100,6 +120,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(rescue_router)
+app.include_router(realtime_router)
 register_rescue_error_handlers(app)
 
 

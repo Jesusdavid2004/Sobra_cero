@@ -79,6 +79,7 @@ class Lot(Base):
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     image_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     pickup_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     status: Mapped[str] = mapped_column(
         String(20), default=BatchStatus.ACTIVE.value, server_default=BatchStatus.ACTIVE.value, index=True
     )

@@ -10,6 +10,7 @@ from app.application.ai_dto import PromotionCopy
 from app.application.ports import AIProvider
 from app.domain.entities import BatchStatus, ReservationStatus
 from app.domain.exceptions import BatchAlreadyReservedError
+from app.infrastructure.realtime.notifier import notify_lot_changed
 from app.llm import build_client
 from app.models import Donation, Lot, Promotion, Reservation
 from app.prompts import PROMOTION_PROMPT_VERSION, VARIANTS, build_prompt
@@ -47,6 +48,7 @@ def reserve_lot(db: Session, lot_id: int, user_id: int, quantity: int) -> Reserv
         .execution_options(synchronize_session=False)
         .values(
             quantity=Lot.quantity - quantity,
+            version=Lot.version + 1,
             status=case(
                 (Lot.quantity == quantity, BatchStatus.SOLD_OUT.value),
                 else_=BatchStatus.ACTIVE.value,
@@ -90,6 +92,7 @@ def reserve_lot(db: Session, lot_id: int, user_id: int, quantity: int) -> Reserv
             raise BatchAlreadyReservedError("You have already reserved this batch") from exc
         raise
     db.refresh(reservation)
+    notify_lot_changed(db, lot_id)
     return reservation
 
 
@@ -125,6 +128,7 @@ def donate_lot(db: Session, lot_id: int, quantity: int) -> Donation:
         .execution_options(synchronize_session=False)
         .values(
             quantity=Lot.quantity - quantity,
+            version=Lot.version + 1,
             status=case(
                 (Lot.quantity == quantity, BatchStatus.DONATED.value),
                 else_=BatchStatus.ACTIVE.value,
@@ -138,6 +142,7 @@ def donate_lot(db: Session, lot_id: int, quantity: int) -> Donation:
     db.add(donation)
     db.commit()
     db.refresh(donation)
+    notify_lot_changed(db, lot_id)
     return donation
 
 
@@ -149,7 +154,7 @@ def cancel_lot(db: Session, lot_id: int) -> Lot:
             Lot.status.in_([BatchStatus.ACTIVE.value, BatchStatus.SOLD_OUT.value]),
         )
         .execution_options(synchronize_session=False)
-        .values(status=BatchStatus.CANCELLED.value, quantity=0)
+        .values(status=BatchStatus.CANCELLED.value, quantity=0, version=Lot.version + 1)
     )
     if result.rowcount != 1:
         db.rollback()
@@ -170,6 +175,7 @@ def cancel_lot(db: Session, lot_id: int) -> Lot:
     lot = db.get(Lot, lot_id)
     if lot is None:
         raise HTTPException(status_code=404, detail="Lot not found")
+    notify_lot_changed(db, lot_id)
     return lot
 
 
@@ -192,7 +198,7 @@ def cancel_reservation(db: Session, reservation_id: int, user_id: int) -> Reserv
             update(Lot)
             .where(Lot.id == lot.id, Lot.status.in_(stock_states))
             .execution_options(synchronize_session=False)
-            .values(status=BatchStatus.EXPIRED.value)
+            .values(status=BatchStatus.EXPIRED.value, version=Lot.version + 1)
         )
     else:
         _claim_active_reservation(db, reservation_id, ReservationStatus.CANCELLED)
@@ -200,10 +206,15 @@ def cancel_reservation(db: Session, reservation_id: int, user_id: int) -> Reserv
             update(Lot)
             .where(Lot.id == lot.id, Lot.status.in_(stock_states))
             .execution_options(synchronize_session=False)
-            .values(quantity=Lot.quantity + reservation.quantity, status=BatchStatus.ACTIVE.value)
+            .values(
+                quantity=Lot.quantity + reservation.quantity,
+                status=BatchStatus.ACTIVE.value,
+                version=Lot.version + 1,
+            )
         )
     db.commit()
     db.refresh(reservation)
+    notify_lot_changed(db, lot.id)
     return reservation
 
 
@@ -241,6 +252,14 @@ def confirm_reservation_pickup(db: Session, reservation_id: int, pickup_code: st
 
 def expire_due_lots(db: Session, now: datetime | None = None) -> int:
     current_time = now or datetime.now(timezone.utc)
+    due_lot_ids = list(
+        db.scalars(
+            select(Lot.id).where(
+                Lot.status.in_([BatchStatus.ACTIVE.value, BatchStatus.SOLD_OUT.value]),
+                Lot.expires_at <= current_time,
+            )
+        )
+    )
     expired_lots = db.execute(
         update(Lot)
         .where(
@@ -248,7 +267,7 @@ def expire_due_lots(db: Session, now: datetime | None = None) -> int:
             Lot.expires_at <= current_time,
         )
         .execution_options(synchronize_session=False)
-        .values(status=BatchStatus.EXPIRED.value)
+        .values(status=BatchStatus.EXPIRED.value, version=Lot.version + 1)
     )
     db.execute(
         update(Reservation)
@@ -259,6 +278,8 @@ def expire_due_lots(db: Session, now: datetime | None = None) -> int:
         .values(status=ReservationStatus.EXPIRED.value)
     )
     db.commit()
+    for lot_id in due_lot_ids:
+        notify_lot_changed(db, lot_id)
     return max(expired_lots.rowcount or 0, 0)
 
 
