@@ -15,8 +15,9 @@ CATEGORY_WORDS = {
     "bakery": ("bakery", "panader", "pan "),
     "dairy": ("dairy", "lacte", "leche"),
     "produce": ("produce", "fruta", "verdura"),
-    "meals": ("meal", "comida", "almuerzo", "lunch"),
-    "drinks": ("drink", "bebida"),
+    "meat": ("meat", "carne"),
+    "prepared": ("meal", "comida", "almuerzo", "lunch", "prepared"),
+    "pantry": ("pantry", "despensa", "drink", "bebida"),
 }
 MAX_CLOCK_HOUR = 12
 MIDDAY_HOUR = 12
