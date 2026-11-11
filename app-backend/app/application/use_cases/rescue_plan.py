@@ -1,12 +1,19 @@
 from datetime import datetime, timedelta, timezone
-from math import ceil
 from typing import Literal
+from uuid import uuid4
 
-from app.application.dto import Actor, DailySales, LotSnapshot
+from app.application.dto import (
+    ANALYSIS_SOURCE_LOCAL_FALLBACK,
+    Actor,
+    DailySales,
+    LotAnalysisInput,
+    LotSnapshot,
+)
 from app.application.ports import (
-    PredictionModel,
+    RescueAnalyzer,
     RescueLotGateway,
     RescuePlanRepository,
+    SalesForecastModelRepository,
     SalesHistoryRepository,
     UnitOfWork,
 )
@@ -19,15 +26,8 @@ from app.domain.exceptions import (
     RescuePlanNotFoundError,
     RescuePlanStaleError,
 )
-from app.domain.rescue import (
-    RescueAction,
-    RescuePlan,
-    RescuePlanStatus,
-    RescueReason,
-    decide_rescue,
-)
+from app.domain.rescue import RescueAction, RescuePlan, RescuePlanStatus, RescueReason
 from app.domain.rules import (
-    HOURS_PER_DAY,
     MIN_HISTORY_DAYS,
     RESCUE_HISTORY_LOOKBACK_DAYS,
     RESCUE_RULE_VERSION,
@@ -37,6 +37,7 @@ NO_MODEL_VERSION = "none"
 SECONDS_PER_HOUR = 3600
 EVENT_GENERATED = "generated"
 EVENT_SUPERSEDED = "superseded"
+EVENT_ANALYSIS_FALLBACK = "analysis_fallback"
 EVENT_APPROVED = "approved"
 EVENT_REJECTED = "rejected"
 EVENT_DISCOUNT_APPLIED = "discount_applied"
@@ -78,16 +79,20 @@ class GenerateRescuePlan:
         lots: RescueLotGateway,
         plans: RescuePlanRepository,
         history: SalesHistoryRepository,
-        prediction_model: PredictionModel,
+        models: SalesForecastModelRepository,
+        analyzer: RescueAnalyzer,
         unit_of_work: UnitOfWork,
     ) -> None:
         self._lots = lots
         self._plans = plans
         self._history = history
-        self._prediction_model = prediction_model
+        self._models = models
+        self._analyzer = analyzer
         self._unit_of_work = unit_of_work
 
-    def execute(self, lot_id: int, actor: Actor, now: datetime | None = None) -> RescuePlan:
+    def execute(
+        self, lot_id: int, actor: Actor, now: datetime | None = None, request_id: str | None = None
+    ) -> RescuePlan:
         _require_shop_actor(actor)
         moment = now or datetime.now(timezone.utc)
         snapshot = self._lots.get_snapshot(lot_id)
@@ -99,13 +104,15 @@ class GenerateRescuePlan:
         history = self._history.list_for_product(
             snapshot.product_id, moment.date() - timedelta(days=RESCUE_HISTORY_LOOKBACK_DAYS - 1)
         )
-        plan = self._build_plan(snapshot, actor, moment, history)
+        plan = self._build_plan(snapshot, actor, moment, history, request_id or uuid4().hex)
         superseded = self._plans.supersede_pending_for_lot(lot_id)
         saved = self._plans.add(plan)
         assert saved.id is not None
         for plan_id in superseded:
             self._plans.record_event(plan_id, EVENT_SUPERSEDED, actor.user_id, {"superseded_by": saved.id})
         self._plans.record_event(saved.id, EVENT_GENERATED, actor.user_id, {"action": saved.action.value})
+        if saved.inputs.get("analysis_source") == ANALYSIS_SOURCE_LOCAL_FALLBACK:
+            self._plans.record_event(saved.id, EVENT_ANALYSIS_FALLBACK, None, {"request_id": request_id})
         self._unit_of_work.commit()
         return saved
 
@@ -115,6 +122,7 @@ class GenerateRescuePlan:
         actor: Actor,
         moment: datetime,
         history: list[DailySales],
+        request_id: str,
     ) -> RescuePlan:
         deadline = _operating_deadline(snapshot)
         hours_left = _hours_until(deadline, moment)
@@ -125,8 +133,8 @@ class GenerateRescuePlan:
             "pickup_ends_at": snapshot.pickup_ends_at.isoformat() if snapshot.pickup_ends_at else None,
             "operating_deadline": deadline.isoformat(),
             "history_days": len(history),
+            "request_id": request_id,
         }
-        horizon_days = max(1, ceil(hours_left / HOURS_PER_DAY))
         if len(history) < MIN_HISTORY_DAYS:
             status = RescuePlanStatus.NOT_ACTIONABLE
             action = RescueAction.INSUFFICIENT_HISTORY
@@ -135,22 +143,30 @@ class GenerateRescuePlan:
             surplus_units: float | None = None
             proposed_discount: int | None = None
             model_version = NO_MODEL_VERSION
+            rule_version = RESCUE_RULE_VERSION
         else:
-            estimate = self._prediction_model.predict(history, snapshot.quantity, horizon_days, moment.date())
-            decision = decide_rescue(
-                available_quantity=snapshot.quantity,
-                expected_sales=estimate.expected_sales,
-                current_discount_percent=snapshot.discount_percent,
-                hours_left=hours_left,
+            analysis = self._analyzer.analyze_lot(
+                request_id,
+                LotAnalysisInput(
+                    lot_ref=str(snapshot.lot_id),
+                    available_quantity=snapshot.quantity,
+                    current_discount_percent=snapshot.discount_percent,
+                    horizon_hours=hours_left,
+                    as_of_date=moment.date(),
+                    history=history,
+                    model=self._models.get_active_model(),
+                ),
             )
-            inputs["horizon_days_used"] = horizon_days
+            inputs["horizon_days_used"] = analysis.horizon_days_used
+            inputs["analysis_source"] = analysis.source
             status = RescuePlanStatus.PENDING_APPROVAL
-            action = decision.action
-            reasons = decision.reasons
-            expected_sales = estimate.expected_sales
-            surplus_units = round(decision.surplus_units, 2)
-            proposed_discount = decision.proposed_discount_percent
-            model_version = estimate.model_version
+            action = analysis.action
+            reasons = analysis.reasons
+            expected_sales = analysis.expected_sales
+            surplus_units = round(analysis.surplus_units, 2)
+            proposed_discount = analysis.proposed_discount_percent
+            model_version = analysis.model_version
+            rule_version = analysis.rule_version
 
         return RescuePlan(
             id=None,
@@ -165,7 +181,7 @@ class GenerateRescuePlan:
             proposed_discount_percent=proposed_discount,
             horizon_hours=round(hours_left, 2),
             data_points=len(history),
-            rule_version=RESCUE_RULE_VERSION,
+            rule_version=rule_version,
             model_version=model_version,
             inputs=inputs,
             created_by=actor.user_id,

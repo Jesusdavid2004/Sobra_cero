@@ -4,6 +4,7 @@ from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 
 from app.domain.exceptions import (
+    AnalysisFailedError,
     InvalidRescuePlanTransitionError,
     LotNotRescuableError,
     RescueLotNotFoundError,
@@ -21,6 +22,7 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
     RescuePlanStaleError: (409, "rescue_plan_stale"),
     InvalidRescuePlanTransitionError: (409, "rescue_plan_invalid_transition"),
     RescuePlanConflictError: (409, "rescue_plan_conflict"),
+    AnalysisFailedError: (502, "analysis_failed"),
 }
 
 

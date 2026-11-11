@@ -100,3 +100,15 @@ class InvalidRescuePlanTransitionError(Exception):
 
 class RescuePlanConflictError(Exception):
     """Raised when a concurrent request already created a pending rescue plan."""
+
+
+class AnalysisUnavailableError(Exception):
+    """Raised when the analysis service is unreachable or exceeds its deadline."""
+
+
+class AnalysisFailedError(Exception):
+    """Raised when the analysis service rejects a request or its credentials."""
+
+
+class InvalidAnalysisRequestError(ValueError):
+    """Raised when an analysis request violates the semantic limits of the contract."""

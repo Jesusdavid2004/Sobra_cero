@@ -6,6 +6,8 @@ from pydantic import BaseModel
 from app.application.dto import (
     AuthUser,
     DailySales,
+    LotAnalysis,
+    LotAnalysisInput,
     LotSnapshot,
     PredictionEstimate,
     SalesForecastEvaluation,
@@ -106,6 +108,12 @@ class UnitOfWork(Protocol):
     def commit(self) -> None: ...
 
     def rollback(self) -> None: ...
+
+
+class RescueAnalyzer(Protocol):
+    def analyze_lot(self, request_id: str, lot: LotAnalysisInput) -> LotAnalysis: ...
+
+    def analyze_shop(self, request_id: str, lots: Sequence[LotAnalysisInput]) -> list[LotAnalysis]: ...
 
 
 class RescueLotGateway(Protocol):

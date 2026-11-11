@@ -42,7 +42,17 @@ class Settings(BaseSettings):
     ai_daily_quota: int = Field(default=25, gt=0)
     ai_cache_ttl_seconds: int = Field(default=900, gt=0)
 
+    analysis_grpc_target: str | None = None
+    analysis_grpc_timeout_seconds: float = Field(default=2.0, gt=0, le=30)
+    analysis_shared_token: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @model_validator(mode="after")
+    def validate_analysis_configuration(self) -> Self:
+        if self.analysis_grpc_target and not self.analysis_shared_token:
+            raise ValueError("ANALYSIS_GRPC_TARGET requires ANALYSIS_SHARED_TOKEN")
+        return self
 
     @model_validator(mode="after")
     def validate_auth_configuration(self) -> Self:

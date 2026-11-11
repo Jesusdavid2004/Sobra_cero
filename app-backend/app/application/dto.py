@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Literal
+from typing import Literal, Sequence
 
+from app.domain.rescue import RescueAction, RescueReason
 from app.domain.value_objects import RiskScore
 
 UserRole = Literal["business", "customer"]
+ANALYSIS_SOURCE_LOCAL = "local"
+ANALYSIS_SOURCE_GRPC = "grpc"
+ANALYSIS_SOURCE_LOCAL_FALLBACK = "local_fallback"
 
 
 @dataclass(frozen=True)
@@ -78,6 +82,31 @@ class AuthUser:
 class SessionTokens:
     access_token: str
     refresh_token: str
+
+
+@dataclass(frozen=True)
+class LotAnalysisInput:
+    lot_ref: str
+    available_quantity: int
+    current_discount_percent: int
+    horizon_hours: float
+    as_of_date: date
+    history: Sequence[DailySales]
+    model: SalesForecastModelArtifact | None
+
+
+@dataclass(frozen=True)
+class LotAnalysis:
+    lot_ref: str
+    expected_sales: float
+    surplus_units: float
+    action: RescueAction
+    proposed_discount_percent: int | None
+    reasons: tuple[RescueReason, ...]
+    model_version: str
+    rule_version: str
+    horizon_days_used: int
+    source: str
 
 
 @dataclass(frozen=True)

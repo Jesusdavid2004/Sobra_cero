@@ -9,7 +9,12 @@ from typing import Protocol
 import httpx
 from pydantic import BaseModel
 
-from app.application.ai_dto import ExpiryDateRead, PromotionCopy, RiskAdvice
+from app.application.ai_dto import (
+    ExpiryDateRead,
+    PromotionCopy,
+    RescueExplanation,
+    RiskAdvice,
+)
 from app.config import settings
 from app.domain.exceptions import AIResponseInvalidError
 
@@ -198,6 +203,15 @@ class FakeAIProviderAdapter:
                     "Consider reviewing the offer while there is still time to reduce waste."
                     if not spanish
                     else "Considera revisar el descuento para reducir el desperdicio de comida."
+                )
+            }
+        elif response_model is RescueExplanation:
+            spanish = "spanish" in prompt.lower()
+            result = {
+                "text": (
+                    "Las ventas esperadas no alcanzan para agotar el stock antes del cierre. Revisa la accion sugerida."
+                    if spanish
+                    else "Expected sales will not clear the stock before pickup closes. Review the suggested action."
                 )
             }
         else:

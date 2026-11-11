@@ -6,7 +6,7 @@ from fastapi import Depends
 from redis import Redis
 from sqlalchemy.orm import Session
 
-from app.application.ports import SessionManager
+from app.application.ports import RescueAnalyzer, SessionManager
 from app.application.use_cases.auth import (
     Login,
     LogoutSession,
@@ -14,6 +14,7 @@ from app.application.use_cases.auth import (
     RegisterUser,
 )
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
+from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
 from app.application.use_cases.rescue_plan import (
     DecideRescuePlan,
@@ -24,6 +25,12 @@ from app.application.use_cases.train_sales_forecast_model import TrainSalesForec
 from app.auth import password_hasher
 from app.config import settings
 from app.db import get_db
+from app.infrastructure.analysis.fallback_analyzer import FallbackRescueAnalyzer
+from app.infrastructure.analysis.grpc_analyzer import (
+    GrpcRescueAnalyzer,
+    create_grpc_analyzer,
+)
+from app.infrastructure.analysis.local_analyzer import LocalRescueAnalyzer
 from app.infrastructure.auth.refresh_sessions import (
     JwtRedisSessionManager,
     RedisRefreshTokenStore,
@@ -107,15 +114,36 @@ def build_sales_history_repository(db: Session) -> PostgresSalesHistoryRepositor
 
 
 def build_generate_rescue_plan_use_case(db: Session) -> GenerateRescuePlan:
-    artifact = build_sales_forecast_model_repository(db).get_active_model()
     return GenerateRescuePlan(
         lots=SqlAlchemyRescueLotGateway(db),
         plans=SqlAlchemyRescuePlanRepository(db),
         history=build_sales_history_repository(db),
-        prediction_model=(
-            WeekdaySalesForecastModel(artifact) if artifact is not None else WeightedMovingAveragePredictionModel()
-        ),
+        models=build_sales_forecast_model_repository(db),
+        analyzer=build_rescue_analyzer(),
         unit_of_work=SqlAlchemyUnitOfWork(db),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_grpc_rescue_analyzer() -> GrpcRescueAnalyzer:
+    assert settings.analysis_grpc_target and settings.analysis_shared_token
+    return create_grpc_analyzer(
+        settings.analysis_grpc_target, settings.analysis_shared_token, settings.analysis_grpc_timeout_seconds
+    )
+
+
+def build_rescue_analyzer() -> RescueAnalyzer:
+    local = LocalRescueAnalyzer()
+    if not settings.analysis_grpc_target:
+        return local
+    return FallbackRescueAnalyzer(get_grpc_rescue_analyzer(), local)
+
+
+def build_explain_rescue_plan_use_case(db: Session) -> ExplainRescuePlan:
+    return ExplainRescuePlan(
+        lots=SqlAlchemyRescueLotGateway(db),
+        plans=SqlAlchemyRescuePlanRepository(db),
+        ai_provider=build_client(),
     )
 
 

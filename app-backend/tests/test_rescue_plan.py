@@ -6,7 +6,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main
-from app.application.dto import Actor, DailySales, LotSnapshot, PredictionEstimate
+from app.application.dto import (
+    Actor,
+    DailySales,
+    LotAnalysis,
+    LotAnalysisInput,
+    LotSnapshot,
+)
 from app.application.use_cases.rescue_plan import (
     DecideRescuePlan,
     GenerateRescuePlan,
@@ -28,7 +34,6 @@ from app.domain.rescue import (
     RescueReason,
     decide_rescue,
 )
-from app.domain.value_objects import RiskScore
 from app.models import Lot, RescuePlanEventRecord
 
 NOW = datetime(2026, 11, 10, 12, 0, tzinfo=timezone.utc)
@@ -185,14 +190,39 @@ class FakeHistory:
         raise NotImplementedError
 
 
-class FixedModel:
+class FakeAnalyzer:
     def __init__(self, expected_sales: float) -> None:
         self.expected_sales = expected_sales
-        self.horizon_days: int | None = None
+        self.calls: list[LotAnalysisInput] = []
 
-    def predict(self, history, current_stock, days_remaining, today) -> PredictionEstimate:
-        self.horizon_days = days_remaining
-        return PredictionEstimate(3.0, self.expected_sales, 0.0, RiskScore(0), "fixed-model-v1")
+    def analyze_lot(self, request_id: str, lot: LotAnalysisInput) -> LotAnalysis:
+        self.calls.append(lot)
+        decision = decide_rescue(
+            available_quantity=lot.available_quantity,
+            expected_sales=self.expected_sales,
+            current_discount_percent=lot.current_discount_percent,
+            hours_left=lot.horizon_hours,
+        )
+        return LotAnalysis(
+            lot_ref=lot.lot_ref,
+            expected_sales=self.expected_sales,
+            surplus_units=decision.surplus_units,
+            action=decision.action,
+            proposed_discount_percent=decision.proposed_discount_percent,
+            reasons=decision.reasons,
+            model_version="fixed-model-v1",
+            rule_version="rescue-rules-v1",
+            horizon_days_used=1,
+            source="local",
+        )
+
+    def analyze_shop(self, request_id: str, lots: Sequence[LotAnalysisInput]) -> list[LotAnalysis]:
+        return [self.analyze_lot(request_id, lot) for lot in lots]
+
+
+class FakeModels:
+    def get_active_model(self) -> None:
+        return None
 
 
 class FakeUnitOfWork:
@@ -225,8 +255,14 @@ def make_snapshot(**overrides) -> LotSnapshot:
 
 def build_generate(snapshot=None, history_days=30, expected_sales=6.0):
     lots = FakeLots(snapshot if snapshot is not None else make_snapshot())
-    plans, uow, model = FakePlans(), FakeUnitOfWork(), FixedModel(expected_sales)
-    return GenerateRescuePlan(lots, plans, FakeHistory(history_days), model, uow), lots, plans, uow, model
+    plans, uow, analyzer = FakePlans(), FakeUnitOfWork(), FakeAnalyzer(expected_sales)
+    return (
+        GenerateRescuePlan(lots, plans, FakeHistory(history_days), FakeModels(), analyzer, uow),
+        lots,
+        plans,
+        uow,
+        analyzer,
+    )
 
 
 # ---- generate use case ----
@@ -247,24 +283,24 @@ def test_generate_creates_pending_plan_with_reasons_and_audit_event():
 
 
 def test_generate_without_enough_history_is_not_actionable_and_has_no_numbers():
-    use_case, _lots, _plans, _uow, model = build_generate(history_days=13)
+    use_case, _lots, _plans, _uow, analyzer = build_generate(history_days=13)
 
     plan = use_case.execute(10, OWNER, NOW)
 
     assert plan.status is RescuePlanStatus.NOT_ACTIONABLE
     assert plan.action is RescueAction.INSUFFICIENT_HISTORY
     assert plan.expected_sales is None and plan.surplus_units is None
-    assert model.horizon_days is None
+    assert analyzer.calls == []
 
 
 def test_generate_uses_the_earlier_of_expiry_and_pickup_deadline():
     snapshot = make_snapshot(expires_at=NOW + timedelta(hours=72), pickup_ends_at=NOW + timedelta(hours=10))
-    use_case, _lots, _plans, _uow, model = build_generate(snapshot)
+    use_case, _lots, _plans, _uow, analyzer = build_generate(snapshot)
 
     plan = use_case.execute(10, OWNER, NOW)
 
     assert plan.horizon_hours == 10
-    assert model.horizon_days == 1
+    assert analyzer.calls[0].horizon_hours == 10
     assert RescueReason.PICKUP_WINDOW_SHORT in plan.reasons
 
 

@@ -27,6 +27,18 @@ class RiskAdvice(BaseModel):
         return value
 
 
+class RescueExplanation(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+    @field_validator("text")
+    @classmethod
+    def keep_explanation_qualitative(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value.split()) > 70 or any(character.isdigit() for character in value):
+            raise ValueError("Rescue explanation must be brief and must not state any numbers")
+        return value
+
+
 class ExpiryDateRead(BaseModel):
     printed_date: str | None = Field(default=None, max_length=80)
     expires_on: date | None = None

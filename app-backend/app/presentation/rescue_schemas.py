@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from app.domain.rescue import RescuePlan
 
 
+class RescueExplanationOut(BaseModel):
+    text: str
+    source: Literal["ai"] = "ai"
+
+
 class RescuePlanOut(BaseModel):
     id: int
     lot_id: int
