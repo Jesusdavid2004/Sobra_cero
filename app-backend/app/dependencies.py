@@ -15,6 +15,17 @@ from app.application.use_cases.auth import (
 )
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
 from app.application.use_cases.discover_lots import DiscoverLots
+from app.application.use_cases.donation_offers import (
+    ConfirmDonationDelivery,
+    CreateDonationOffer,
+    DraftDonationMessage,
+    FindDonationReceivers,
+    GetMyReceiver,
+    ListLotDonationOffers,
+    ListReceiverOffers,
+    RegisterReceiver,
+    RespondToDonationOffer,
+)
 from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
 from app.application.use_cases.get_public_shop import GetPublicShop
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
@@ -55,6 +66,9 @@ from app.infrastructure.realtime.publishers import (
 )
 from app.infrastructure.repositories.discovery_repository import (
     SqlAlchemyDiscoveryLotSource,
+)
+from app.infrastructure.repositories.donation_repository import (
+    SqlAlchemyDonationRepository,
 )
 from app.infrastructure.repositories.impact_repository import SqlAlchemyImpactRepository
 from app.infrastructure.repositories.public_shop_repository import (
@@ -229,3 +243,39 @@ def build_discover_lots_use_case(db: Session) -> DiscoverLots:
 
 def build_parse_discovery_intent_use_case() -> ParseDiscoveryIntent:
     return ParseDiscoveryIntent(build_client())
+
+
+def build_find_donation_receivers_use_case(db: Session) -> FindDonationReceivers:
+    return FindDonationReceivers(SqlAlchemyDonationRepository(db))
+
+
+def build_create_donation_offer_use_case(db: Session) -> CreateDonationOffer:
+    return CreateDonationOffer(SqlAlchemyDonationRepository(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_draft_donation_message_use_case(db: Session) -> DraftDonationMessage:
+    return DraftDonationMessage(SqlAlchemyDonationRepository(db), build_client())
+
+
+def build_respond_to_donation_offer_use_case(db: Session) -> RespondToDonationOffer:
+    return RespondToDonationOffer(SqlAlchemyDonationRepository(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_confirm_donation_delivery_use_case(db: Session) -> ConfirmDonationDelivery:
+    return ConfirmDonationDelivery(SqlAlchemyDonationRepository(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_register_receiver_use_case(db: Session) -> RegisterReceiver:
+    return RegisterReceiver(SqlAlchemyDonationRepository(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_get_my_receiver_use_case(db: Session) -> GetMyReceiver:
+    return GetMyReceiver(SqlAlchemyDonationRepository(db))
+
+
+def build_list_receiver_offers_use_case(db: Session) -> ListReceiverOffers:
+    return ListReceiverOffers(SqlAlchemyDonationRepository(db))
+
+
+def build_list_lot_donation_offers_use_case(db: Session) -> ListLotDonationOffers:
+    return ListLotDonationOffers(SqlAlchemyDonationRepository(db))

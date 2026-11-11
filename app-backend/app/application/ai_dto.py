@@ -3,7 +3,11 @@ from datetime import date
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.domain.rules import MAX_DISCOVERY_QUANTITY, MAX_PARSED_BUDGET
+from app.domain.rules import (
+    MAX_DISCOVERY_QUANTITY,
+    MAX_DONATION_MESSAGE_CHARS,
+    MAX_PARSED_BUDGET,
+)
 
 CLOCK_TIME_PATTERN = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 CATEGORY_PATTERN = re.compile(r"^[a-z_]{2,40}$")
@@ -72,4 +76,16 @@ class DiscoveryIntent(BaseModel):
     def require_category_slug(cls, value: str | None) -> str | None:
         if value is not None and not CATEGORY_PATTERN.match(value):
             raise ValueError("Category must be a lowercase word")
+        return value
+
+
+class DonationOfferDraft(BaseModel):
+    text: str = Field(min_length=1, max_length=MAX_DONATION_MESSAGE_CHARS)
+
+    @field_validator("text")
+    @classmethod
+    def keep_message_free_of_numbers(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value.split()) > 70 or any(character.isdigit() for character in value):
+            raise ValueError("The offer message must be brief and must not state any numbers")
         return value

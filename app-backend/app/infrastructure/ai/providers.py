@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.application.ai_dto import (
     DiscoveryIntent,
+    DonationOfferDraft,
     ExpiryDateRead,
     PromotionCopy,
     RescueExplanation,
@@ -214,6 +215,17 @@ class FakeAIProviderAdapter:
                     "Las ventas esperadas no alcanzan para agotar el stock antes del cierre. Revisa la accion sugerida."
                     if spanish
                     else "Expected sales will not clear the stock before pickup closes. Review the suggested action."
+                )
+            }
+        elif response_model is DonationOfferDraft:
+            spanish = "spanish" in prompt.lower()
+            result = {
+                "text": (
+                    "Hola, tenemos excedente de comida disponible para recoger antes del cierre. Si les sirve, "
+                    "avisen para coordinar la entrega."
+                    if spanish
+                    else "Hello, we have surplus food available for pickup before closing. "
+                    "If it suits you, let us know and we will arrange the handover."
                 )
             }
         elif response_model is DiscoveryIntent:

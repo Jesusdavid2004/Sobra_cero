@@ -63,6 +63,7 @@ from app.models import (
 from app.presentation.error_handlers import register_rescue_error_handlers
 from app.presentation.routers.auth import router as auth_router
 from app.presentation.routers.discovery import router as discovery_router
+from app.presentation.routers.donations import router as donations_router
 from app.presentation.routers.impact import router as impact_router
 from app.presentation.routers.public import router as public_router
 from app.presentation.routers.realtime import router as realtime_router
@@ -127,6 +128,7 @@ app.include_router(realtime_router)
 app.include_router(impact_router)
 app.include_router(public_router)
 app.include_router(discovery_router)
+app.include_router(donations_router)
 register_rescue_error_handlers(app)
 
 

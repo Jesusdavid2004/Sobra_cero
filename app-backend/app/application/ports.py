@@ -19,6 +19,13 @@ from app.domain.discovery import LotCandidate
 from app.domain.events import LotStockChanged
 from app.domain.impact import ReservationOutcome
 from app.domain.public_shop import PublicShop
+from app.domain.receivers import (
+    DonationLot,
+    DonationOffer,
+    OfferStatus,
+    OfferView,
+    Receiver,
+)
 from app.domain.rescue import RescuePlan, RescuePlanStatus
 from app.domain.timeline import DonationRow, PlanEventRow, ReservationRow
 
@@ -101,6 +108,34 @@ class ImpactRepository(Protocol):
 
 class DiscoveryLotSource(Protocol):
     def open_candidates(self, now: datetime) -> list[LotCandidate]: ...
+
+
+class DonationRepository(Protocol):
+    def get_lot(self, lot_id: int) -> DonationLot | None: ...
+
+    def list_receivers(self) -> list[Receiver]: ...
+
+    def get_receiver(self, receiver_id: int) -> Receiver | None: ...
+
+    def get_receiver_by_owner(self, user_id: int) -> Receiver | None: ...
+
+    def add_receiver(self, receiver: Receiver) -> Receiver: ...
+
+    def recent_committed_counts(self, since: datetime) -> dict[int, int]: ...
+
+    def add_offer(self, lot_id: int, receiver_id: int, quantity: int, message: str, now: datetime) -> DonationOffer: ...
+
+    def get_offer(self, offer_id: int) -> DonationOffer | None: ...
+
+    def view_offers_for_lot(self, lot_id: int) -> list[OfferView]: ...
+
+    def view_offers_for_receiver(self, receiver_id: int) -> list[OfferView]: ...
+
+    def claim_offer(self, offer_id: int, current: OfferStatus, target: OfferStatus, now: datetime) -> bool: ...
+
+    def commit_stock(self, lot_id: int, quantity: int, now: datetime) -> bool: ...
+
+    def record_delivery(self, lot_id: int, quantity: int) -> None: ...
 
 
 class LotEventPublisher(Protocol):
