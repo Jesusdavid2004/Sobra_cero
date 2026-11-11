@@ -14,10 +14,12 @@ from app.application.use_cases.auth import (
     RegisterUser,
 )
 from app.application.use_cases.calculate_waste_risk import CalculateWasteRiskUseCase
+from app.application.use_cases.discover_lots import DiscoverLots
 from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
 from app.application.use_cases.get_public_shop import GetPublicShop
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
 from app.application.use_cases.lot_timeline import GetLotTimeline
+from app.application.use_cases.parse_discovery_intent import ParseDiscoveryIntent
 from app.application.use_cases.rescue_plan import (
     DecideRescuePlan,
     GenerateRescuePlan,
@@ -50,6 +52,9 @@ from app.infrastructure.realtime.hub import LotStreamHub
 from app.infrastructure.realtime.publishers import (
     InMemoryLotEventPublisher,
     RedisLotEventPublisher,
+)
+from app.infrastructure.repositories.discovery_repository import (
+    SqlAlchemyDiscoveryLotSource,
 )
 from app.infrastructure.repositories.impact_repository import SqlAlchemyImpactRepository
 from app.infrastructure.repositories.public_shop_repository import (
@@ -216,3 +221,11 @@ def build_train_sales_forecast_model_use_case(db: Session) -> TrainSalesForecast
         repository=build_sales_forecast_model_repository(db),
         trainer=WeekdaySalesForecastTrainer(),
     )
+
+
+def build_discover_lots_use_case(db: Session) -> DiscoverLots:
+    return DiscoverLots(SqlAlchemyDiscoveryLotSource(db))
+
+
+def build_parse_discovery_intent_use_case() -> ParseDiscoveryIntent:
+    return ParseDiscoveryIntent(build_client())

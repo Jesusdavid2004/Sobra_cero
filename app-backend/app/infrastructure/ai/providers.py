@@ -10,6 +10,7 @@ import httpx
 from pydantic import BaseModel
 
 from app.application.ai_dto import (
+    DiscoveryIntent,
     ExpiryDateRead,
     PromotionCopy,
     RescueExplanation,
@@ -17,6 +18,7 @@ from app.application.ai_dto import (
 )
 from app.config import settings
 from app.domain.exceptions import AIResponseInvalidError
+from app.infrastructure.ai.offline_intent import read_discovery_intent_offline
 
 ProviderResponse = tuple[str, int, int]
 
@@ -214,6 +216,8 @@ class FakeAIProviderAdapter:
                     else "Expected sales will not clear the stock before pickup closes. Review the suggested action."
                 )
             }
+        elif response_model is DiscoveryIntent:
+            result = read_discovery_intent_offline(prompt)
         else:
             raise AIResponseInvalidError("No deterministic response is defined for this schema")
         return json.dumps(result), 0, 0

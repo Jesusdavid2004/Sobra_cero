@@ -15,6 +15,7 @@ from app.application.dto import (
     SessionTokens,
     UserRole,
 )
+from app.domain.discovery import LotCandidate
 from app.domain.events import LotStockChanged
 from app.domain.impact import ReservationOutcome
 from app.domain.public_shop import PublicShop
@@ -96,6 +97,10 @@ class ImpactRepository(Protocol):
     def reservation_outcomes(self, shop_id: int) -> list[ReservationOutcome]: ...
 
     def donated_units(self, shop_id: int) -> int: ...
+
+
+class DiscoveryLotSource(Protocol):
+    def open_candidates(self, now: datetime) -> list[LotCandidate]: ...
 
 
 class LotEventPublisher(Protocol):

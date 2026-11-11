@@ -5,6 +5,7 @@ from starlette.responses import JSONResponse
 
 from app.domain.exceptions import (
     AnalysisFailedError,
+    DiscoveryInvalidError,
     InvalidRescuePlanTransitionError,
     LotNotRescuableError,
     RescueLotNotFoundError,
@@ -29,6 +30,7 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
     ShopNotFoundError: (404, "shop_not_found"),
     SimulationUnavailableError: (409, "simulation_unavailable"),
     SimulationInvalidError: (422, "simulation_invalid"),
+    DiscoveryInvalidError: (422, "discovery_invalid"),
 }
 
 
