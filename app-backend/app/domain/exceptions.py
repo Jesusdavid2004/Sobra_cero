@@ -128,3 +128,47 @@ class InvalidAnalysisRequestError(ValueError):
 
 class DiscoveryInvalidError(Exception):
     """The discovery search parameters are not a valid request."""
+
+
+class ReceiverInvalidError(Exception):
+    """The receiver profile values are outside what the matching rules can use."""
+
+
+class ReceiverAlreadyExistsError(Exception):
+    """The account already has a receiver profile."""
+
+
+class ReceiverNotFoundError(Exception):
+    """No receiver profile matches the request, or it belongs to someone else."""
+
+
+class DonationLotNotFoundError(Exception):
+    """The lot is missing, not open for donation, or not owned by the caller."""
+
+
+class DonationQuantityInvalidError(Exception):
+    """The offered quantity is not between one and the units available."""
+
+
+class DonationReceiverIncompatibleError(Exception):
+    """The receiver cannot take this lot right now (category, capacity, storage, distance or hours)."""
+
+
+class DonationOfferConflictError(Exception):
+    """An active offer for this lot and receiver already exists."""
+
+
+class DonationOfferNotFoundError(Exception):
+    """The offer is missing or the caller is not a party to it."""
+
+
+class DonationOfferStateError(Exception):
+    """The offer is no longer in the state this action needs."""
+
+
+class DonationStockUnavailableError(Exception):
+    """The units offered are no longer available, so the offer cannot be accepted."""
+
+
+class DonationPermissionError(Exception):
+    """The action needs a business account."""
