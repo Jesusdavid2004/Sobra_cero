@@ -124,3 +124,7 @@ class AnalysisFailedError(Exception):
 
 class InvalidAnalysisRequestError(ValueError):
     """Raised when an analysis request violates the semantic limits of the contract."""
+
+
+class DiscoveryInvalidError(Exception):
+    """The discovery search parameters are not a valid request."""
