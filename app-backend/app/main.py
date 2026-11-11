@@ -62,6 +62,7 @@ from app.models import (
 )
 from app.presentation.error_handlers import register_rescue_error_handlers
 from app.presentation.routers.auth import router as auth_router
+from app.presentation.routers.impact import router as impact_router
 from app.presentation.routers.realtime import router as realtime_router
 from app.presentation.routers.rescue import router as rescue_router
 from app.prompts import EXPIRY_SCAN_PROMPT_VERSION, build_expiry_scan_prompt
@@ -121,6 +122,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(rescue_router)
 app.include_router(realtime_router)
+app.include_router(impact_router)
 register_rescue_error_handlers(app)
 
 

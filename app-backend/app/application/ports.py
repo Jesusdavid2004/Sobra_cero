@@ -16,6 +16,7 @@ from app.application.dto import (
     UserRole,
 )
 from app.domain.events import LotStockChanged
+from app.domain.impact import ReservationOutcome
 from app.domain.rescue import RescuePlan, RescuePlanStatus
 
 
@@ -75,6 +76,12 @@ class AIProvider(Protocol):
         image_mime_type: str | None = None,
         model_tier: str = "fast",
     ) -> AIOutput: ...
+
+
+class ImpactRepository(Protocol):
+    def reservation_outcomes(self, shop_id: int) -> list[ReservationOutcome]: ...
+
+    def donated_units(self, shop_id: int) -> int: ...
 
 
 class LotEventPublisher(Protocol):
