@@ -257,3 +257,46 @@ class SalesForecastModel(Base):
     status: Mapped[str] = mapped_column(String(20), index=True)
     active_slot: Mapped[str | None] = mapped_column(String(10), unique=True, nullable=True)
     trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class ReceiverRecord(Base):
+    __tablename__ = "receivers"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    name: Mapped[str] = mapped_column(String(160))
+    latitude: Mapped[float] = mapped_column(Float)
+    longitude: Mapped[float] = mapped_column(Float)
+    accepted_categories: Mapped[str] = mapped_column(String(200))
+    max_quantity: Mapped[int] = mapped_column(Integer)
+    can_store_refrigerated: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+    open_from_minute: Mapped[int] = mapped_column(Integer)
+    open_until_minute: Mapped[int] = mapped_column(Integer)
+    utc_offset_minutes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
+class DonationOfferRecord(Base):
+    __tablename__ = "donation_offers"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('offered', 'accepted', 'declined', 'delivered')",
+            name="ck_donation_offers_status",
+        ),
+        Index(
+            "uq_donation_offers_active_lot_receiver",
+            "lot_id",
+            "receiver_id",
+            unique=True,
+            sqlite_where=text("status IN ('offered', 'accepted')"),
+            postgresql_where=text("status IN ('offered', 'accepted')"),
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"), index=True)
+    receiver_id: Mapped[int] = mapped_column(ForeignKey("receivers.id", ondelete="CASCADE"), index=True)
+    quantity: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="offered", server_default="offered")
+    message: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

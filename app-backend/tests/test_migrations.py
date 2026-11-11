@@ -44,6 +44,8 @@ def test_upgrade_creates_the_complete_schema_from_an_empty_database(tmp_path: Pa
         "sales_history",
         "waste_predictions",
         "sales_forecast_models",
+        "receivers",
+        "donation_offers",
     }.issubset(set(inspector.get_table_names()))
     assert {"role"} <= {column["name"] for column in inspector.get_columns("users")}
     assert {"pickup_code"} <= {column["name"] for column in inspector.get_columns("reservations")}
@@ -53,9 +55,7 @@ def test_upgrade_creates_the_complete_schema_from_an_empty_database(tmp_path: Pa
     with engine.connect() as connection:
         assert "version" in {column["name"] for column in inspector.get_columns("lots")}
         assert "status_changed_at" in {column["name"] for column in inspector.get_columns("reservations")}
-        assert (
-            connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009_reservation_status_changed_at"
-        )
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010_donation_receivers"
     assert "pickup_ends_at" in {column["name"] for column in inspector.get_columns("lots")}
     assert "uq_rescue_plans_pending_lot" in {index["name"] for index in inspector.get_indexes("rescue_plans")}
     assert {"status", "image_key"} <= {column["name"] for column in inspector.get_columns("lots")}
