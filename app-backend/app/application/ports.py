@@ -17,6 +17,7 @@ from app.application.dto import (
 )
 from app.domain.events import LotStockChanged
 from app.domain.impact import ReservationOutcome
+from app.domain.public_shop import PublicShop
 from app.domain.rescue import RescuePlan, RescuePlanStatus
 from app.domain.timeline import DonationRow, PlanEventRow, ReservationRow
 
@@ -77,6 +78,10 @@ class AIProvider(Protocol):
         image_mime_type: str | None = None,
         model_tier: str = "fast",
     ) -> AIOutput: ...
+
+
+class PublicShopRepository(Protocol):
+    def get(self, shop_id: int) -> PublicShop | None: ...
 
 
 class LotTimelineSource(Protocol):

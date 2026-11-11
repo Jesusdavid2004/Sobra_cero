@@ -12,6 +12,7 @@ from app.domain.exceptions import (
     RescuePlanConflictError,
     RescuePlanNotFoundError,
     RescuePlanStaleError,
+    ShopNotFoundError,
     SimulationInvalidError,
     SimulationUnavailableError,
 )
@@ -25,6 +26,7 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
     InvalidRescuePlanTransitionError: (409, "rescue_plan_invalid_transition"),
     RescuePlanConflictError: (409, "rescue_plan_conflict"),
     AnalysisFailedError: (502, "analysis_failed"),
+    ShopNotFoundError: (404, "shop_not_found"),
     SimulationUnavailableError: (409, "simulation_unavailable"),
     SimulationInvalidError: (422, "simulation_invalid"),
 }

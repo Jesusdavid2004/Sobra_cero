@@ -102,6 +102,10 @@ class RescuePlanConflictError(Exception):
     """Raised when a concurrent request already created a pending rescue plan."""
 
 
+class ShopNotFoundError(Exception):
+    """Raised when a public shop profile does not exist."""
+
+
 class SimulationUnavailableError(Exception):
     """Raised when a plan has no numbers to simulate from."""
 
