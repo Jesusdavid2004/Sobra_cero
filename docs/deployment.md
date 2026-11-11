@@ -58,6 +58,7 @@ obtaining approval; this is intentionally not part of the normal stop command.
 | `AI_MAX_TOKENS`, `AI_TIMEOUT_SECONDS` | Bound provider output and duration. | `512`, `20`. |
 | `AI_DAILY_QUOTA`, `AI_CACHE_TTL_SECONDS` | Per-user request quota and cached result lifetime. | `25`, `900`. |
 | `NEXT_PUBLIC_API_URL` | Browser-visible API base URL compiled into Next.js. | `http://localhost:8000/api/v1`; it must resolve from the user's browser. |
+| `REALTIME_BROKER` | `memory` delivers live stock inside one process; `redis` uses Redis Pub/Sub so several replicas share events. | `memory`. With one Railway replica `memory` is enough; set `redis` before scaling out. |
 | `ANALYSIS_GRPC_TARGET` | `host:port` of the rescue analysis gRPC service; empty analyzes in-process. | Compose sets `analysis:50051`. On Railway use the service's private domain. |
 | `ANALYSIS_SHARED_TOKEN` | Token callers send to the analysis service; required when a target is set and for the service itself. | Compose has a development default; set a unique value elsewhere. |
 | `ANALYSIS_GRPC_TIMEOUT_SECONDS` | Per-call deadline before falling back locally. | `2`. |

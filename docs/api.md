@@ -61,6 +61,24 @@ The shop confirms collection from the dashboard. Pickup confirmation is
 limited to five requests per minute per client IP and is checked against the
 owning shop and code.
 
+## Live lot stock (WebSocket)
+
+`GET /api/v1/ws/lots` (WebSocket, public). Send `{"action": "subscribe", "lot_ids": [1, 2]}`; the
+server answers with `{"type": "snapshot", "lots": [...]}` read from the database and then pushes
+`lot.stock_changed` events:
+
+```json
+{"type": "lot.stock_changed", "lot_id": 1, "version": 3, "quantity": 2, "status": "active",
+ "discount_percent": 30, "occurred_at": "2026-11-10T12:00:00+00:00"}
+```
+
+Apply an event only if its `version` is newer than the one you hold, and subscribe again after
+every reconnect to receive a fresh snapshot. Other actions: `unsubscribe` and `ping` (answered with
+`{"type": "pong"}`). Invalid messages get `{"type": "error", "code": "invalid_message"}`; going over
+the subscription cap gets `too_many_subscriptions`; flooding closes the socket with code 1008, as
+does an `Origin` that is not in `CORS_ORIGINS`. Events never contain pickup codes or personal data.
+See ADR 0008.
+
 ## Rescue plans
 
 | Method | Path | Purpose |
