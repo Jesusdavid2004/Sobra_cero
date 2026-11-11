@@ -26,6 +26,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: localstack:4566
       MINIO_PUBLIC_URL: http://localhost:4566
+      ANALYSIS_GRPC_TARGET: analysis:50051
+      ANALYSIS_SHARED_TOKEN: ${ANALYSIS_SHARED_TOKEN:-dev-analysis-token}
     ports: ["8000:8000"]
     depends_on: [postgres, redis, localstack]
   worker:
@@ -41,9 +43,16 @@ services:
     command: celery -A app.worker.celery_app beat --loglevel=info
     env_file: .env
     environment:
-      DATABASE_URL: ******postgres:5432/sobracero
+      DATABASE_URL: postgresql+psycopg2://sobracero:sobracero@postgres:5432/sobracero
       REDIS_URL: redis://redis:6379/0
     depends_on: [postgres, redis]
+  analysis:
+    build:
+      context: .
+      dockerfile: app-analysis/Dockerfile
+    environment:
+      ANALYSIS_SHARED_TOKEN: ${ANALYSIS_SHARED_TOKEN:-dev-analysis-token}
+      PORT: "50051"
 volumes:
   postgres_data:
   localstack_data:

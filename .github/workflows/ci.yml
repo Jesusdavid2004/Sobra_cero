@@ -12,9 +12,18 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r app-backend/requirements.txt
+      - name: Generated gRPC stubs are up to date
+        run: |
+          python scripts/generate_grpc.py
+          git diff --exit-code -- app-backend/app/infrastructure/analysis/generated
       - run: pytest --cov=app.domain --cov=app.application --cov-fail-under=70 app-backend/tests
         env: { PYTHONPATH: app-backend }
-      - run: black --check app-backend/app app-backend/tests
-      - run: isort --check-only app-backend/app app-backend/tests
-      - run: flake8 --max-line-length=120 --extend-ignore=E203,W503 app-backend/app app-backend/tests
+      - run: black --config app-backend/pyproject.toml --check app-backend/app app-backend/tests app-analysis scripts
+      - run: isort --settings-path app-backend/pyproject.toml --check-only app-backend/app app-backend/tests app-analysis scripts
+      - run: flake8 --max-line-length=120 --extend-ignore=E203,W503 app-backend/app app-backend/tests app-analysis scripts
       - run: mypy --config-file app-backend/pyproject.toml app-backend/app/domain app-backend/app/application
+  analysis-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f app-analysis/Dockerfile -t sobracero-analysis .
