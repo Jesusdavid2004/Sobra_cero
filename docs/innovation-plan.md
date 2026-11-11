@@ -6,6 +6,19 @@ careful about claims: surplus-food sales, discounts and donations already exist 
 Good To Go, Flashfood, Olio, Wasteless, EatCloud). The proposal is **not** "first of its kind";
 it is a bounded, explainable and verifiable rescue flow, with tests as evidence.
 
+## Progress
+
+| # | Feature | Status |
+| --- | --- | --- |
+| 1 | Concurrency and idempotency tests | Done: `tests/test_concurrency.py`; found and fixed a double pickup and double stock return. |
+| 2 | Live stock over WebSockets | Done: ADR 0008, two-browser check, reconnect with snapshot. |
+| 3 | Rescue timeline | Done: anonymous, inside each rescue plan. |
+| 4 | Verified impact panel | Done: pickups counted once, estimates labelled. |
+| 5 | What-if simulator | Done: always labelled hypothetical. |
+| 6 | Pickup QR | Not started. |
+| 7 | ISR shop profile | Done: `MISS` / `HIT` / `STALE` observed in a production build. |
+| 8 | Worker and scheduler on Railway | Not started (the custom domain was dropped from scope). |
+
 ## 1. What exists today (verified)
 
 | Area | State |

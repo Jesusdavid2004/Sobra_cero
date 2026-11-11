@@ -61,6 +61,31 @@ The shop confirms collection from the dashboard. Pickup confirmation is
 limited to five requests per minute per client IP and is checked against the
 owning shop and code.
 
+## Insights for shop owners
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/shops/{shop_id}/impact` | Verified impact: units picked up, donated, pending, cancelled and expired, plus estimated revenue and savings. |
+| `GET` | `/api/v1/lots/{lot_id}/timeline` | Anonymous history of a lot: plan, decision, reservations, pickups, cancellations, expiries and donations. |
+| `POST` | `/api/v1/rescue-plans/{plan_id}/simulation` | Compare keeping the offer, applying a discount step and separating units for donation. |
+
+All three are owner (or admin) only. **Impact** counts only confirmed pickups as rescued, and a pickup
+is counted once even if it is confirmed again. Revenue and savings are estimates: reservations do
+not store the price they were made at, so each lot's current price is used. No environmental
+equivalence is reported. **Timeline** shows units and times only, never who reserved or any pickup
+code. **Simulation** takes `demand_uplift_percent` (0-300, default 0) and `donation_units`
+(default: the whole units of estimated surplus). The effect of a discount on demand is the value you
+send, not a prediction: the response always carries `"hypothetical": true`, and `"stale": true`
+when the lot stock changed after the plan was created. Invalid values return
+`422 { code: "simulation_invalid" }` and a plan without numbers returns
+`409 { code: "simulation_unavailable" }`.
+
+## Public shop profile
+
+`GET /api/v1/public/shops/{shop_id}` returns `id`, `name`, `description`, `business_type`,
+`latitude` and `longitude`, without authentication and without any owner data. Unknown shops return
+`404 { code: "shop_not_found" }`. The frontend serves it through ISR.
+
 ## Live lot stock (WebSocket)
 
 `GET /api/v1/ws/lots` (WebSocket, public). Send `{"action": "subscribe", "lot_ids": [1, 2]}`; the
