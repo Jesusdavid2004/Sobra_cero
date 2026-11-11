@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+- Added pickup discovery: customers give a pickup window, budget, quantity and category and see
+  only the lots they can collect in time, with the reason each other lot was left out. A language
+  model can fill the form from a typed sentence; the customer reviews it. Includes a seeded
+  synthetic comparison against distance-only ordering.
+- Added donation receivers: profiles with accepted categories, capacity, refrigeration and opening
+  hours; compatibility checked before a fair ordering; shop offers (with an optional AI-drafted
+  message), receiver acceptance that commits stock once, and delivery confirmation. Only delivered
+  offers count as donated units.
+- Added a pickup QR for reservations, scanned at the shop with the browser barcode detector where
+  available (manual entry otherwise); the server still validates and confirms each pickup once.
+- Migration 0010 adds `receivers` and `donation_offers`.
 - Added an API readiness endpoint that checks PostgreSQL and Redis separately
   from the liveness endpoint.
 - Added business-dashboard confirmation for customer pickups using the

@@ -141,6 +141,55 @@ request is forwarded to the service. If the service is unreachable or exceeds
 `analysis_fallback` event is recorded. A rejected request or bad token returns
 `502 { code: "analysis_failed" }`. See ADR 0007.
 
+## Pickup discovery
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/discovery/lots` | Split open lots into those the customer can collect and those they cannot, with reasons. Public. |
+| `POST` | `/api/v1/discovery/parse` | Turn one sentence into search constraints with the language model. Requires an account; counts against the daily AI quota. |
+
+`GET /discovery/lots` takes `latitude`, `longitude`, `window_start`, `window_end` (timezone-aware
+datetimes), `radius_km` (default 10, maximum 50), `quantity`, and optionally `budget_cents` and
+`category`. The response has `approximate: true`, `feasible` (closing soonest first),
+`excluded` with `reasons` (`too_far`, `closes_before_arrival`, `outside_pickup_window`,
+`over_budget`, `not_enough_stock`, `category_mismatch`) and `nearest_unreachable`, the lot a
+distance-only list would have shown first when it cannot be collected. Distance is straight-line
+and travel time uses one declared average speed, so both are approximate. An inverted window
+returns `422 { code: "discovery_invalid" }`.
+
+`POST /discovery/parse` accepts `{ "text": "..." }` (3 to 300 characters) and returns
+`budget`, `pickup_from`, `pickup_until` (24-hour `HH:MM`), `quantity` and `category`, each
+`null` when the text does not state it. Nothing is searched; the client shows the values for the
+customer to review. See `docs/ai-usage.md`. The evaluation of the two orderings is in
+`docs/evaluation-discovery.md`.
+
+## Donation receivers and offers
+
+A receiver is a profile on an ordinary account (one per account), not a separate role.
+SobraCero does not verify that an organization is authorized to receive food.
+
+| Method | Path | Who | Purpose |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/receivers` | any account | Create the receiver profile: accepted categories, capacity, refrigeration, opening hours, UTC offset. |
+| `GET` | `/api/v1/receivers/me` | receiver | Read the profile (`404 receiver_not_found` if none). |
+| `GET` | `/api/v1/receivers/me/offers` | receiver | Offers made to this receiver. |
+| `GET` | `/api/v1/lots/{id}/donation-candidates?quantity=` | lot owner | Compatible receivers (fair order) and those left out with reasons. |
+| `POST` | `/api/v1/lots/{id}/donation-offers/draft` | lot owner | Draft a courteous message with the language model. |
+| `POST` | `/api/v1/lots/{id}/donation-offers` | lot owner | Offer a quantity to one compatible receiver. Stock is not touched yet. |
+| `GET` | `/api/v1/lots/{id}/donation-offers` | lot owner | Offers made for the lot. |
+| `POST` | `/api/v1/donation-offers/{id}/accept` | receiver | Accept: commits the units atomically, once. |
+| `POST` | `/api/v1/donation-offers/{id}/decline` | receiver | Decline. Stock is untouched. |
+| `POST` | `/api/v1/donation-offers/{id}/delivered` | lot owner | Confirm the handover. Only delivered offers count as donated units in the impact view. |
+
+Compatibility is checked before any ordering: category accepted, quantity within capacity,
+refrigerated categories (`dairy`, `meat`, `prepared`) need a receiver that can keep them cold,
+distance within 15 km, and the receiver's daily opening window (in its own UTC offset) must
+overlap the time between arrival and the lot's closing. Among compatible receivers the order is
+fewest accepted donations in the last 30 days, then nearest. Error codes: `donation_lot_not_found`,
+`donation_quantity_invalid`, `donation_receiver_incompatible`, `donation_offer_conflict` (an
+active offer for that lot and receiver already exists), `donation_offer_state` (already
+answered), `donation_stock_unavailable`, `receiver_already_exists`, `receiver_invalid`.
+
 ## AI, image review, and administration
 
 | Method | Path | Purpose |

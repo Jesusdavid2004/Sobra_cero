@@ -15,9 +15,11 @@ it is a bounded, explainable and verifiable rescue flow, with tests as evidence.
 | 3 | Rescue timeline | Done: anonymous, inside each rescue plan. |
 | 4 | Verified impact panel | Done: pickups counted once, estimates labelled. |
 | 5 | What-if simulator | Done: always labelled hypothetical. |
-| 6 | Pickup QR | Not started. |
+| 6 | Pickup QR | Done: ADR 0009, strict payload, scanning only fills the form, server still confirms once. |
 | 7 | ISR shop profile | Done: `MISS` / `HIT` / `STALE` observed in a production build. |
 | 8 | Worker and scheduler on Railway | Not started (the custom domain was dropped from scope). |
+| 9 | Pickup discovery by window and budget, with an AI reader for a typed request | Done: `docs/evaluation-discovery.md`, `docs/ai-usage.md`. |
+| 10 | Donation receivers: compatibility rules, fair order, AI-drafted message, accept and delivery proof | Done: demo receivers only; no verification of organizations. |
 
 ## 1. What exists today (verified)
 
