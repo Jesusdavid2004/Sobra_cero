@@ -93,6 +93,19 @@ def reserve_lot(db: Session, lot_id: int, user_id: int, quantity: int) -> Reserv
     return reservation
 
 
+def _claim_active_reservation(db: Session, reservation_id: int, target: ReservationStatus) -> None:
+    """Move a reservation out of `reserved` exactly once, whatever the database or concurrency level."""
+    claimed = db.execute(
+        update(Reservation)
+        .where(Reservation.id == reservation_id, Reservation.status == ReservationStatus.RESERVED.value)
+        .execution_options(synchronize_session=False)
+        .values(status=target.value)
+    )
+    if claimed.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Reservation is no longer active")
+
+
 def donate_lot(db: Session, lot_id: int, quantity: int) -> Donation:
     now = datetime.now(timezone.utc)
     lot = db.get(Lot, lot_id)
@@ -172,15 +185,23 @@ def cancel_reservation(db: Session, reservation_id: int, user_id: int) -> Reserv
     lot = db.execute(select(Lot).where(Lot.id == reservation.lot_id).with_for_update()).scalar_one()
     now = datetime.now(timezone.utc)
     expires_at = lot.expires_at.replace(tzinfo=timezone.utc) if lot.expires_at.tzinfo is None else lot.expires_at
+    stock_states = [BatchStatus.ACTIVE.value, BatchStatus.SOLD_OUT.value]
     if expires_at <= now or lot.status == BatchStatus.EXPIRED.value:
-        if lot.status in {BatchStatus.ACTIVE.value, BatchStatus.SOLD_OUT.value}:
-            lot.status = BatchStatus.EXPIRED.value
-        reservation.status = ReservationStatus.EXPIRED.value
+        _claim_active_reservation(db, reservation_id, ReservationStatus.EXPIRED)
+        db.execute(
+            update(Lot)
+            .where(Lot.id == lot.id, Lot.status.in_(stock_states))
+            .execution_options(synchronize_session=False)
+            .values(status=BatchStatus.EXPIRED.value)
+        )
     else:
-        if lot.status in {BatchStatus.ACTIVE.value, BatchStatus.SOLD_OUT.value}:
-            lot.quantity += reservation.quantity
-            lot.status = BatchStatus.ACTIVE.value
-        reservation.status = ReservationStatus.CANCELLED.value
+        _claim_active_reservation(db, reservation_id, ReservationStatus.CANCELLED)
+        db.execute(
+            update(Lot)
+            .where(Lot.id == lot.id, Lot.status.in_(stock_states))
+            .execution_options(synchronize_session=False)
+            .values(quantity=Lot.quantity + reservation.quantity, status=BatchStatus.ACTIVE.value)
+        )
     db.commit()
     db.refresh(reservation)
     return reservation
@@ -212,7 +233,7 @@ def confirm_reservation_pickup(db: Session, reservation_id: int, pickup_code: st
         BatchStatus.DONATED.value,
     }:
         raise HTTPException(status_code=409, detail="Lot is no longer available for pickup")
-    reservation.status = ReservationStatus.PICKED_UP.value
+    _claim_active_reservation(db, reservation_id, ReservationStatus.PICKED_UP)
     db.commit()
     db.refresh(reservation)
     return reservation
