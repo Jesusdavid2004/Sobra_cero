@@ -16,6 +16,7 @@ from app.domain.exceptions import (
     DonationStockUnavailableError,
     InvalidRescuePlanTransitionError,
     LotNotRescuableError,
+    PlaceInvalidError,
     ReceiverAlreadyExistsError,
     ReceiverInvalidError,
     ReceiverNotFoundError,
@@ -24,9 +25,15 @@ from app.domain.exceptions import (
     RescuePlanConflictError,
     RescuePlanNotFoundError,
     RescuePlanStaleError,
+    ScannerBusinessNotFoundError,
+    ScannerPermissionError,
+    ScannerSourceNotFoundError,
     ShopNotFoundError,
     SimulationInvalidError,
     SimulationUnavailableError,
+    SourceInvalidError,
+    SourceNotRunnableError,
+    SourceUrlRejectedError,
 )
 
 ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
@@ -42,6 +49,13 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
     SimulationUnavailableError: (409, "simulation_unavailable"),
     SimulationInvalidError: (422, "simulation_invalid"),
     DiscoveryInvalidError: (422, "discovery_invalid"),
+    PlaceInvalidError: (422, "place_invalid"),
+    ScannerPermissionError: (403, "scanner_permission_denied"),
+    ScannerSourceNotFoundError: (404, "scanner_source_not_found"),
+    ScannerBusinessNotFoundError: (404, "scanner_business_not_found"),
+    SourceInvalidError: (422, "scanner_source_invalid"),
+    SourceUrlRejectedError: (422, "scanner_url_rejected"),
+    SourceNotRunnableError: (409, "scanner_source_not_runnable"),
     DonationPermissionError: (403, "donation_permission_denied"),
     DonationLotNotFoundError: (404, "donation_lot_not_found"),
     DonationQuantityInvalidError: (422, "donation_quantity_invalid"),
@@ -56,13 +70,19 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
 }
 
 
+REASON_EXCEPTIONS = (SourceInvalidError, SourceUrlRejectedError, SourceNotRunnableError)
+
+
 def register_rescue_error_handlers(app: FastAPI) -> None:
     for exception_type, (status_code, code) in ERROR_CONTRACT.items():
         app.add_exception_handler(exception_type, _build_handler(status_code, code))
 
 
 def _build_handler(status_code: int, code: str):  # type: ignore[no-untyped-def]
-    def handler(_request: Request, _exc: Exception) -> JSONResponse:
-        return JSONResponse(status_code=status_code, content={"code": code, "message_key": f"errors.{code}"})
+    def handler(_request: Request, exc: Exception) -> JSONResponse:
+        content: dict[str, object] = {"code": code, "message_key": f"errors.{code}"}
+        if isinstance(exc, REASON_EXCEPTIONS):
+            content["details"] = {"reason": str(exc)}
+        return JSONResponse(status_code=status_code, content=content)
 
     return handler
