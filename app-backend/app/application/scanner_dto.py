@@ -97,3 +97,15 @@ class ScannerSummary:
     pending_validation: int
     stale_products: int
     last_runs: tuple[ExecutionView, ...]
+
+
+@dataclass(frozen=True)
+class RunResult:
+    execution_id: int
+    status: str
+    accepted: int
+    rejected: int
+    pending: int
+    duplicates: int
+    stop_reason: str
+    error: str

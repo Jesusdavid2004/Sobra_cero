@@ -15,6 +15,16 @@ from app.application.dto import (
     SessionTokens,
     UserRole,
 )
+from app.application.scanner_dto import (
+    BusinessView,
+    ExecutionView,
+    PricePoint,
+    ProductView,
+    RecordView,
+    RunResult,
+    ScannerSummary,
+    SourceView,
+)
 from app.domain.discovery import LotCandidate
 from app.domain.events import LotStockChanged
 from app.domain.impact import ReservationOutcome
@@ -204,3 +214,43 @@ class RescuePlanRepository(Protocol):
     def record_event(
         self, plan_id: int, event_type: str, actor_id: int | None, payload: Mapping[str, object]
     ) -> None: ...
+
+
+class ScannerRepository(Protocol):
+    def list_sources(self) -> list[SourceView]: ...
+
+    def get_source(self, key: str) -> SourceView | None: ...
+
+    def add_source(
+        self, key: str, name: str, kind: str, base_url: str, domain: str, license_note: str
+    ) -> SourceView: ...
+
+    def record_terms_review(self, key: str, user_id: int, note: str, license_note: str, now: datetime) -> bool: ...
+
+    def set_enabled(self, key: str, enabled: bool) -> bool: ...
+
+    def set_schedule(self, key: str, minutes: int | None) -> bool: ...
+
+    def due_sources(self, now: datetime) -> list[str]: ...
+
+    def fail_stale_runs(self, now: datetime, max_age_seconds: int) -> int: ...
+
+    def list_executions(self, source_key: str | None, limit: int) -> list[ExecutionView]: ...
+
+    def list_records(self, execution_id: int, limit: int) -> list[RecordView]: ...
+
+    def list_products(
+        self, source_key: str | None, promotions_only: bool, limit: int, now: datetime
+    ) -> list[ProductView]: ...
+
+    def price_history(self, product_id: int) -> list[PricePoint]: ...
+
+    def list_businesses(self, verification: str | None, limit: int, now: datetime) -> list[BusinessView]: ...
+
+    def set_business_verification(self, business_id: int, status: str) -> bool: ...
+
+    def summary(self, now: datetime) -> ScannerSummary: ...
+
+
+class SourceRunner(Protocol):
+    def run(self, source_key: str, trigger: str, user_id: int | None) -> RunResult: ...
