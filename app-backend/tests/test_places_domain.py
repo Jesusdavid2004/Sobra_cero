@@ -14,6 +14,7 @@ from app.domain.places import (
     category_from_osm,
     name_similarity,
     normalize_name,
+    shop_category,
     validate_place_name,
 )
 
@@ -100,3 +101,18 @@ def test_a_place_name_is_trimmed_and_must_not_be_empty_or_huge():
         validate_place_name("   ")
     with pytest.raises(PlaceInvalidError):
         validate_place_name("x" * 161)
+
+
+@pytest.mark.parametrize(
+    ("business_type", "dominant", "expected"),
+    [
+        ("supermarket", "bakery", PlaceCategory.SUPERMARKET),
+        ("supermarket", None, PlaceCategory.SUPERMARKET),
+        ("restaurant", "bakery", PlaceCategory.BAKERY),
+        ("restaurant", "dairy", PlaceCategory.RESTAURANT),
+        ("restaurant", None, PlaceCategory.RESTAURANT),
+        ("kiosk", None, PlaceCategory.OTHER),
+    ],
+)
+def test_an_affiliated_shop_is_shown_under_the_category_that_describes_it(business_type, dominant, expected):
+    assert shop_category(business_type, dominant) is expected

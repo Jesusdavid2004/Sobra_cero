@@ -125,3 +125,16 @@ def validate_place_name(name: str) -> str:
     if not cleaned or len(cleaned) > MAX_PLACE_NAME_CHARS:
         raise PlaceInvalidError("A place needs a name of at most 160 characters")
     return cleaned
+
+
+def shop_category(business_type: str, dominant_product_category: str | None) -> PlaceCategory:
+    """Category shown on the map for an affiliated shop.
+
+    A shop only declares restaurant or supermarket. A restaurant whose products are mostly bread
+    is shown as a bakery; a supermarket always stays a supermarket.
+    """
+    if business_type == "supermarket":
+        return PlaceCategory.SUPERMARKET
+    if dominant_product_category == "bakery":
+        return PlaceCategory.BAKERY
+    return PlaceCategory.RESTAURANT if business_type == "restaurant" else PlaceCategory.OTHER
