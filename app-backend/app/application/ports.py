@@ -15,6 +15,7 @@ from app.application.dto import (
     SessionTokens,
     UserRole,
 )
+from app.application.map_dto import MapPlace, PromotionView
 from app.application.scanner_dto import (
     BusinessView,
     ExecutionView,
@@ -29,6 +30,8 @@ from app.domain.discovery import LotCandidate
 from app.domain.events import LotStockChanged
 from app.domain.geocoding import GeocodeResult
 from app.domain.impact import ReservationOutcome
+from app.domain.opportunities import SignalPoint
+from app.domain.places import BoundingBox
 from app.domain.public_shop import PublicShop
 from app.domain.receivers import (
     DonationLot,
@@ -259,3 +262,19 @@ class SourceRunner(Protocol):
 
 class GeocodingProvider(Protocol):
     def search(self, query: str, limit: int = ...) -> list[GeocodeResult]: ...
+
+
+class MapRepository(Protocol):
+    def affiliated(
+        self, bounds: BoundingBox, categories: frozenset[str], text: str, only_offers: bool, limit: int, now: datetime
+    ) -> list[MapPlace]: ...
+
+    def discovered(
+        self, bounds: BoundingBox, categories: frozenset[str], text: str, include_demo: bool, limit: int, now: datetime
+    ) -> list[MapPlace]: ...
+
+    def receivers(self, bounds: BoundingBox, text: str, limit: int) -> list[MapPlace]: ...
+
+    def signal_points(self, bounds: BoundingBox, include_demo: bool, now: datetime) -> list[SignalPoint]: ...
+
+    def fresh_promotions(self, limit: int, now: datetime) -> list[PromotionView]: ...
