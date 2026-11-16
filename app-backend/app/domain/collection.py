@@ -45,6 +45,7 @@ class ProductOutcome(StrEnum):
 
 class StopReason(StrEnum):
     ACCESS_DENIED = "access_denied"
+    ROBOTS_FORBIDDEN = "robots_forbidden"
     RATE_LIMITED = "rate_limited"
     TIMEOUT = "timeout"
     CRASHED = "crashed"
