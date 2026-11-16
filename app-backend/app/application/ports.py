@@ -27,6 +27,7 @@ from app.application.scanner_dto import (
 )
 from app.domain.discovery import LotCandidate
 from app.domain.events import LotStockChanged
+from app.domain.geocoding import GeocodeResult
 from app.domain.impact import ReservationOutcome
 from app.domain.public_shop import PublicShop
 from app.domain.receivers import (
@@ -254,3 +255,7 @@ class ScannerRepository(Protocol):
 
 class SourceRunner(Protocol):
     def run(self, source_key: str, trigger: str, user_id: int | None) -> RunResult: ...
+
+
+class GeocodingProvider(Protocol):
+    def search(self, query: str, limit: int = ...) -> list[GeocodeResult]: ...

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     ai_daily_quota: int = Field(default=25, gt=0)
     ai_cache_ttl_seconds: int = Field(default=900, gt=0)
 
+    geocoder_provider: Literal["nominatim", "fake"] = "nominatim"
+    geocoder_user_agent: str = "SobraCero/1.0 (food-waste research project)"
+    geocoder_base_url: str = "https://nominatim.openstreetmap.org/search"
     scraper_allowed_domains: str = "overpass-api.de,exito.com,alkosto.com,jumbocolombia.com"
     scraper_disable_url_policy: bool = False
 
