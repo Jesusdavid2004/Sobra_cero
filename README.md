@@ -2,6 +2,8 @@
 
 SobraCero is a food-rescue marketplace: shops publish lots close to expiry and neighbors reserve or donate them. This repository contains the backend (FastAPI, SQLAlchemy, Celery, Redis, PostgreSQL, LocalStack for S3-compatible storage). The Next.js/Tailwind frontend is in a separate repository, [Sobra_cero_fronent](https://github.com/Jesusdavid2004/Sobra_cero_fronent).
 
+Beyond the marketplace it now includes an explainable rescue plan with human approval, live stock over WebSockets, a pickup QR, a feasible-pickup search with an AI request reader, donation receivers, an interactive map of food businesses in Pasto, a polite data collection engine (the Scanner) and a daily shop diagnosis with declared waste. Numbers and decisions come from tested code; the language model only reads or words text (see [`docs/AI_SYSTEM.md`](docs/AI_SYSTEM.md)).
+
 ## Run locally
 
 1. Copy `.env.example` to `.env` (secrets stay local, never committed).
@@ -146,9 +148,24 @@ business and confirm pickup using the displayed reference and code. Start the
 Celery worker and scheduler with `docker compose up worker scheduler` to
 process promo jobs and lot expiration asynchronously.
 
+## Map, Scanner and demonstration data
+
+- **Map**: open `/en/map` in the frontend. Affiliated shops are solid discs, businesses found in public sources are dashed rings and are never shown as affiliated. See [`docs/MAPS_GUIDE.md`](docs/MAPS_GUIDE.md).
+- **Demonstration businesses for Pasto**: `python scripts/seed_pasto_demo.py` (from the repository root, with `DATABASE_URL` set). They are flagged as demo data and hidden unless the visitor opts in.
+- **Scanner**: sign in as an administrator and open `/en/admin/scanner`. A source must have its terms review recorded before it can be enabled or run. From a terminal, inside `app-backend`: `python -m scraper.run --source KEY`. See [`docs/SCRAPING_GUIDE.md`](docs/SCRAPING_GUIDE.md).
+- **Scheduled runs and lot expiry** need the `worker` and `scheduler` services: `docker compose up worker scheduler`.
+
 ## Project documentation
 
 - [Architecture and data model](docs/architecture.md)
+- [Audit before the food-intelligence phase](docs/audit-2026-11.md)
+- [Research: sources, policies and technology choices](docs/research-sources.md)
+- [Scraping guide](docs/SCRAPING_GUIDE.md)
+- [Maps guide](docs/MAPS_GUIDE.md)
+- [AI system](docs/AI_SYSTEM.md) and [where the model is used](docs/ai-usage.md)
+- [Pickup search evaluation](docs/evaluation-discovery.md)
+- [User guide](docs/USER_GUIDE.md)
+- [Environment variables](docs/ENVIRONMENT_VARIABLES.md)
 - [API guide](docs/api.md)
 - [Model and AI evaluation](docs/evaluation.md)
 - [Security notes and release checklist](docs/security.md)
@@ -169,5 +186,12 @@ lote; esos datos solo son visibles para el comercio propietario. Las cuentas
 de cliente pueden reservar lotes y reciben una referencia y un código único
 para recogerlos; el comercio confirma la recogida. El OCR propone fechas de
 vencimiento a partir de una foto, pero siempre requiere confirmación humana.
-Las cuentas para bancos de alimentos todavía no están implementadas. No hay
+Las organizaciones receptoras pueden crear un perfil (categorías, capacidad,
+refrigeración y horario), recibir ofertas de donación compatibles y aceptarlas;
+SobraCero no verifica a esas organizaciones ni certifica la inocuidad de los
+alimentos. Un mapa interactivo de Pasto distingue los comercios afiliados de los
+negocios encontrados en fuentes públicas (nunca se muestran como afiliados), y el
+Scanner (solo administradores) recolecta datos públicos con Scrapy únicamente de
+fuentes cuyos términos una persona revisó. El diagnóstico diario del comercio usa
+solo sus registros; la IA solo redacta las alertas y nunca decide cifras. No hay
 despliegue público de producción verificado.
