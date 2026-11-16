@@ -194,3 +194,148 @@ erDiagram
 `SALES_FORECAST_MODEL` stores the JSON artifact, time-ordered evaluation
 metrics, and the active-model marker. Some lifecycle details, such as promotion
 variants, are omitted from the diagram for readability.
+
+## Food-intelligence phase (2026-11)
+
+This phase added a place directory and map, a data collection engine (the Scanner), donation
+receivers, the daily shop diagnosis and declared waste. Dependencies keep pointing inward:
+presentation, then application, then domain; infrastructure implements the interfaces declared
+inside, and one composition root (`app/dependencies.py`) wires the concrete classes.
+
+### System context with the new parts
+
+```mermaid
+flowchart LR
+  Customer([Customer]) --> Web
+  Owner([Shop owner]) --> Web
+  Receiver([Receiving organization]) --> Web
+  Admin([Administrator]) --> Web
+  Web[Next.js frontend] -->|HTTPS + WebSocket| API[FastAPI backend]
+  API --> DB[(PostgreSQL)]
+  API --> Redis[(Redis)]
+  API --> Storage[(S3-compatible storage)]
+  API -->|structured output| LLM[Language model: Groq / Anthropic / OpenAI]
+  API -->|gRPC, optional| Analysis[Analysis service]
+  API -->|subprocess| Scraper[Scrapy engine]
+  Scraper -->|polite requests| Sources[Public sources: OpenStreetMap, catalogs]
+  API -->|1 req/s, cached| Nominatim[Geocoder]
+  Worker[Celery worker and beat] --> DB
+  Worker --> Scraper
+```
+
+### Components in the backend
+
+```mermaid
+flowchart TB
+  subgraph presentation
+    Routers[routers + schemas + error handlers]
+  end
+  subgraph application
+    UseCases[use cases: one execute() each]
+    Ports[ports: repositories, AI, geocoder, runner]
+  end
+  subgraph domain
+    Rules[entities, value objects, rules, typed exceptions]
+  end
+  subgraph infrastructure
+    Repos[SQLAlchemy repositories]
+    Adapters[AI, geocoding and runner adapters]
+  end
+  Routers --> UseCases --> Rules
+  UseCases --> Ports
+  Repos -.implements.-> Ports
+  Adapters -.implements.-> Ports
+```
+
+| Area | Domain rules | Notes |
+| --- | --- | --- |
+| Marketplace | `entities`, `rules`, `services.py` (first generation) | Atomic conditional updates; concurrency tests |
+| Rescue | `rescue`, `simulation`, `timeline`, `impact` | Human approval, audit events, stale-plan protection |
+| Discovery | `discovery`, `discovery_evaluation` | Feasibility by window, budget and distance |
+| Donations | `receivers` | Hard rules first, then a fair order |
+| Geography | `places`, `geocoding`, `opportunities` | Affiliation is never inferred |
+| Collection (Scanner) | `external_data`, `collection`, `url_policy`, `source_policy` | Policy gate before any request |
+| Intelligence | `diagnosis`, `waste` | Deterministic; the model only words |
+
+### Daily diagnosis flow
+
+```mermaid
+sequenceDiagram
+  participant O as Shop owner
+  participant R as Router
+  participant U as DiagnoseShop
+  participant D as Domain (diagnose)
+  participant P as AIProvider
+  O->>R: GET /shops/{id}/diagnosis
+  R->>U: execute(actor, shop, language)
+  U->>D: snapshot -> facts, alerts, limitations
+  U->>P: generate_structured(codes only)
+  alt model answers
+    P-->>U: narrative (no digits)
+  else unavailable or quota
+    P-->>U: error
+    U-->>U: narrative = none
+  end
+  U-->>R: facts + alerts + limitations + narrative?
+  R-->>O: JSON
+```
+
+### A Scanner run
+
+```mermaid
+sequenceDiagram
+  participant A as Administrator
+  participant API as RunSourceNow
+  participant S as scraper.run (subprocess)
+  participant G as Policy gate
+  participant W as Source site
+  A->>API: POST /admin/scanner/sources/{key}/run
+  API->>S: python -m scraper.run --source key
+  S->>G: enabled? terms reviewed? safe URL?
+  alt refused
+    G-->>S: reason
+    S-->>API: stopped (not_allowed) recorded in history
+  else allowed
+    S->>W: robots.txt, then polite requests
+    W-->>S: pages (stop on 401, 403, 429)
+    S-->>API: counters, stop reason, rejected records
+  end
+  API-->>A: run summary
+```
+
+### Data model of the new tables
+
+```mermaid
+erDiagram
+  external_sources ||--o{ external_businesses : finds
+  external_sources ||--o{ external_products : lists
+  external_products ||--o{ external_price_observations : "price history"
+  external_sources ||--o{ scraping_executions : runs
+  scraping_executions ||--o{ scraping_records : "rejected or pending"
+  users ||--o| receivers : owns
+  receivers ||--o{ donation_offers : receives
+  lots ||--o{ donation_offers : "offered in"
+  lots ||--o{ waste_records : "declared waste"
+```
+
+External data lives in its own tables and never becomes a lot, an offer or an affiliate.
+
+### Frontend
+
+Next.js App Router with next-intl (en/es), light/dark/system theme, Zod validation of every API
+response and one module (`lib/api.ts`) that talks to the backend. Rendering per route is in the
+frontend's `docs/rendering.md`: static, server-rendered, streaming, incremental regeneration and
+client-rendered pages, each chosen for freshness and privacy.
+
+### Deployment
+
+Railway runs the backend, the frontend, PostgreSQL and Redis; a worker and a scheduler (Celery) are
+optional services that run lot expiry and due Scanner sources. See `deployment.md`. The backend
+image contains Scrapy so the same image can run the engine; the web process never imports it.
+
+### Security
+
+Argon2/bcrypt passwords, short-lived access tokens with a rotating refresh cookie, ownership checks
+in use cases, per-client rate limits on authentication, AI, geocoding and pickup, SSRF protection for
+source addresses, a terms-review gate for external data, and typed errors mapped centrally to
+`{ code, message_key, details? }`. See `security.md`.
