@@ -188,3 +188,19 @@ class SourceUrlRejectedError(Exception):
 
 class SourceNotRunnableError(Exception):
     """A collection source may not run right now; the message is a stable reason code."""
+
+
+class ScannerPermissionError(Exception):
+    """Only administrators may manage the Scanner."""
+
+
+class ScannerSourceNotFoundError(Exception):
+    """No collection source matches the key."""
+
+
+class SourceInvalidError(Exception):
+    """The source values are not valid; the message is a stable reason code."""
+
+
+class ScannerBusinessNotFoundError(Exception):
+    """No external business matches the id."""
