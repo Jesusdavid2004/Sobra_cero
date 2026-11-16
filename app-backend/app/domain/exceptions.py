@@ -180,3 +180,7 @@ class PlaceInvalidError(Exception):
 
 class ExternalDataInvalidError(Exception):
     """A collected record was rejected; the message is a stable reason code."""
+
+
+class SourceUrlRejectedError(Exception):
+    """A source URL failed the safety policy; the message is a stable reason code."""
