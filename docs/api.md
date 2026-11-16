@@ -190,6 +190,59 @@ fewest accepted donations in the last 30 days, then nearest. Error codes: `donat
 active offer for that lot and receiver already exists), `donation_offer_state` (already
 answered), `donation_stock_unavailable`, `receiver_already_exists`, `receiver_invalid`.
 
+## Map, geocoding and opportunities
+
+All public. See `docs/MAPS_GUIDE.md`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/map/places` | Places in an area: affiliated shops, businesses found in public sources and receivers, kept apart. Query: `south`, `west`, `north`, `east` (default Pasto), repeated `layer` (`affiliated`, `discovered`, `receivers`), repeated `category`, `q`, `only_with_offers`, `include_demo`, `limit` (at most 500). |
+| `GET` | `/api/v1/map/opportunities` | Counts of verifiable records per cell of about 1 km, with `somewhere_to_invite`. Never estimates waste. |
+| `GET` | `/api/v1/map/promotions` | Fresh promotions published by public catalogs. A promotion is not a surplus. |
+| `GET` | `/api/v1/geo/search?q=` | Place search through the configured geocoder. 20 requests per minute per client. |
+
+Each place has `place_id` (`shop:`, `ext:` or `receiver:` prefix), `affiliation` (`affiliated`,
+`prospect` or `discovered`), `source`, `source_url`, `last_seen_at`, `freshness` (`fresh`, `stale`
+or empty), `verified`, `is_demo` and `offer_count`. Errors: `place_invalid`,
+`geocoding_query_invalid`, `geocoder_unavailable` (503), `rate_limited` (429).
+
+## Scanner (administrators)
+
+All under `/api/v1/admin/scanner`; every endpoint requires an administrator and returns
+`403 scanner_permission_denied` otherwise. See `docs/SCRAPING_GUIDE.md`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/summary` | Counters: sources, active, disabled, with problems, products, promotions, businesses, rejected, pending validation, out of date, latest runs. |
+| `GET`, `POST` | `/sources` | List or register a source. A new source is disabled and unreviewed; its address goes through the safety policy. |
+| `POST` | `/sources/{key}/terms-review` | Record that the terms were reviewed (a note of at least 10 characters). |
+| `POST` | `/sources/{key}/enabled` | Enable or disable. Enabling requires a recorded review. |
+| `PUT` | `/sources/{key}/schedule` | Run every N minutes (at least 15) or `null` for manual only. |
+| `POST` | `/sources/{key}/run` | Run now in a subprocess. A refused run is recorded in the history. |
+| `GET` | `/executions`, `/executions/{id}/records` | Run history and the rejected records of a run. |
+| `GET` | `/products`, `/products/{id}/history` | Collected products with freshness, and their price history. |
+| `GET` | `/businesses` | Discovered businesses. Always `discovered`, never affiliated. |
+| `POST` | `/businesses/{id}/verification` | Mark `verified`, `rejected` or `unverified`. |
+
+Errors carry the reason in `details.reason`: `scanner_url_rejected` (`not_https`,
+`has_credentials`, `bad_port`, `ip_literal`, `domain_not_allowed`, `unresolvable`,
+`private_address`, `too_long`), `scanner_source_not_runnable` (`terms_not_reviewed`, `disabled`,
+`unsupported_kind`, `unknown_source`), `scanner_source_invalid` (`key_taken`, `invalid_key`,
+`invalid_name`, `invalid_kind`, `invalid_review_note`, `invalid_schedule`).
+
+## Waste and daily diagnosis
+
+Business accounts, for their own shops only. See `docs/AI_SYSTEM.md`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/api/v1/lots/{id}/waste` | Declare wasted units (`quantity`, `reason`: `expired`, `damaged`, `unsold`, `other`, optional `note`). Units leave the lot atomically and once. |
+| `GET` | `/api/v1/shops/{id}/waste` | The shop's declared waste, newest first. |
+| `GET` | `/api/v1/shops/{id}/diagnosis?language=` | Facts, alerts, limitations, data used and an AI summary. If the model is unavailable the numbers are still returned and `narrative_status` is `unavailable` or `quota_exceeded`. |
+
+Errors: `waste_invalid` (`details.reason`: `quantity_out_of_range`, `note_too_long`),
+`waste_lot_not_found`, `waste_permission_denied`, `shop_not_found`.
+
 ## AI, image review, and administration
 
 | Method | Path | Purpose |
