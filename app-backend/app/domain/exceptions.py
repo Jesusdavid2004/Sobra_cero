@@ -184,3 +184,7 @@ class ExternalDataInvalidError(Exception):
 
 class SourceUrlRejectedError(Exception):
     """A source URL failed the safety policy; the message is a stable reason code."""
+
+
+class SourceNotRunnableError(Exception):
+    """A collection source may not run right now; the message is a stable reason code."""
