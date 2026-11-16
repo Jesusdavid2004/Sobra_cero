@@ -26,6 +26,7 @@ from app.application.scanner_dto import (
     ScannerSummary,
     SourceView,
 )
+from app.domain.diagnosis import ShopSnapshot
 from app.domain.discovery import LotCandidate
 from app.domain.events import LotStockChanged
 from app.domain.geocoding import GeocodeResult
@@ -42,6 +43,7 @@ from app.domain.receivers import (
 )
 from app.domain.rescue import RescuePlan, RescuePlanStatus
 from app.domain.timeline import DonationRow, PlanEventRow, ReservationRow
+from app.domain.waste import WasteEntry, WasteLot
 
 
 class SalesHistoryRepository(Protocol):
@@ -278,3 +280,17 @@ class MapRepository(Protocol):
     def signal_points(self, bounds: BoundingBox, include_demo: bool, now: datetime) -> list[SignalPoint]: ...
 
     def fresh_promotions(self, limit: int, now: datetime) -> list[PromotionView]: ...
+
+
+class InventoryRepository(Protocol):
+    def get_lot(self, lot_id: int) -> WasteLot | None: ...
+
+    def get_shop_owner(self, shop_id: int) -> int | None: ...
+
+    def remove_stock(self, lot_id: int, quantity: int) -> bool: ...
+
+    def add_waste(self, lot_id: int, quantity: int, reason: str, note: str, user_id: int, now: datetime) -> None: ...
+
+    def list_waste(self, shop_id: int, limit: int) -> list[WasteEntry]: ...
+
+    def snapshot(self, shop_id: int, now: datetime) -> ShopSnapshot: ...
