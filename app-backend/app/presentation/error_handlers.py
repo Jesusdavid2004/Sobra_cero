@@ -37,6 +37,9 @@ from app.domain.exceptions import (
     SourceInvalidError,
     SourceNotRunnableError,
     SourceUrlRejectedError,
+    WasteInvalidError,
+    WasteLotNotFoundError,
+    WastePermissionError,
 )
 
 ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
@@ -53,6 +56,9 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
     SimulationInvalidError: (422, "simulation_invalid"),
     DiscoveryInvalidError: (422, "discovery_invalid"),
     PlaceInvalidError: (422, "place_invalid"),
+    WasteInvalidError: (422, "waste_invalid"),
+    WasteLotNotFoundError: (404, "waste_lot_not_found"),
+    WastePermissionError: (403, "waste_permission_denied"),
     GeocodingQueryInvalidError: (422, "geocoding_query_invalid"),
     GeocoderUnavailableError: (503, "geocoder_unavailable"),
     RateLimitedError: (429, "rate_limited"),
@@ -76,7 +82,7 @@ ERROR_CONTRACT: dict[type[Exception], tuple[int, str]] = {
 }
 
 
-REASON_EXCEPTIONS = (SourceInvalidError, SourceUrlRejectedError, SourceNotRunnableError)
+REASON_EXCEPTIONS = (SourceInvalidError, SourceUrlRejectedError, SourceNotRunnableError, WasteInvalidError)
 
 
 def register_rescue_error_handlers(app: FastAPI) -> None:

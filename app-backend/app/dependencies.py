@@ -31,6 +31,7 @@ from app.application.use_cases.donation_offers import (
 from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
 from app.application.use_cases.get_public_shop import GetPublicShop
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
+from app.application.use_cases.inventory import DiagnoseShop, ListShopWaste, RecordWaste
 from app.application.use_cases.lot_timeline import GetLotTimeline
 from app.application.use_cases.map_places import (
     GetMapOpportunities,
@@ -98,6 +99,9 @@ from app.infrastructure.repositories.donation_repository import (
     SqlAlchemyDonationRepository,
 )
 from app.infrastructure.repositories.impact_repository import SqlAlchemyImpactRepository
+from app.infrastructure.repositories.inventory_repository import (
+    SqlAlchemyInventoryRepository,
+)
 from app.infrastructure.repositories.map_repository import SqlAlchemyMapRepository
 from app.infrastructure.repositories.public_shop_repository import (
     SqlAlchemyPublicShopRepository,
@@ -398,3 +402,15 @@ def build_search_geocode_use_case() -> SearchGeocode:
     if _nominatim is None:
         _nominatim = NominatimGeocoder(httpx.Client(), app_settings.geocoder_user_agent, app_settings.geocoder_base_url)
     return SearchGeocode(_nominatim)
+
+
+def build_record_waste_use_case(db: Session) -> RecordWaste:
+    return RecordWaste(SqlAlchemyInventoryRepository(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_list_shop_waste_use_case(db: Session) -> ListShopWaste:
+    return ListShopWaste(SqlAlchemyInventoryRepository(db))
+
+
+def build_diagnose_shop_use_case(db: Session) -> DiagnoseShop:
+    return DiagnoseShop(SqlAlchemyInventoryRepository(db), build_client())
