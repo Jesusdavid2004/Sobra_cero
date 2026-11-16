@@ -68,6 +68,7 @@ from app.presentation.routers.impact import router as impact_router
 from app.presentation.routers.public import router as public_router
 from app.presentation.routers.realtime import router as realtime_router
 from app.presentation.routers.rescue import router as rescue_router
+from app.presentation.routers.scanner import router as scanner_router
 from app.prompts import EXPIRY_SCAN_PROMPT_VERSION, build_expiry_scan_prompt
 from app.schemas import (
     DonationCreate,
@@ -129,6 +130,7 @@ app.include_router(impact_router)
 app.include_router(public_router)
 app.include_router(discovery_router)
 app.include_router(donations_router)
+app.include_router(scanner_router)
 register_rescue_error_handlers(app)
 
 

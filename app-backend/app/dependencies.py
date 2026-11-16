@@ -36,11 +36,28 @@ from app.application.use_cases.rescue_plan import (
     GenerateRescuePlan,
     ListRescuePlans,
 )
+from app.application.use_cases.scanner import (
+    GetPriceHistory,
+    GetScannerSummary,
+    ListCollectedProducts,
+    ListDiscoveredBusinesses,
+    ListExecutionRecords,
+    ListExecutions,
+    ListScannerSources,
+    RecordTermsReview,
+    RegisterSource,
+    RunDueSources,
+    RunSourceNow,
+    SetSourceEnabled,
+    SetSourceSchedule,
+    VerifyBusiness,
+)
 from app.application.use_cases.shop_impact import GetShopImpact
 from app.application.use_cases.simulate_rescue_plan import SimulateRescuePlan
 from app.application.use_cases.train_sales_forecast_model import TrainSalesForecastModel
 from app.auth import password_hasher
 from app.config import settings
+from app.config import settings as app_settings
 from app.db import get_db
 from app.infrastructure.analysis.fallback_analyzer import FallbackRescueAnalyzer
 from app.infrastructure.analysis.grpc_analyzer import (
@@ -52,6 +69,7 @@ from app.infrastructure.auth.refresh_sessions import (
     JwtRedisSessionManager,
     RedisRefreshTokenStore,
 )
+from app.infrastructure.network import resolve_host
 from app.infrastructure.prediction.weekday_sales_forecast import (
     WeekdaySalesForecastModel,
     WeekdaySalesForecastTrainer,
@@ -85,10 +103,14 @@ from app.infrastructure.repositories.sales_forecast_model_repository import (
 from app.infrastructure.repositories.sales_history_repository import (
     PostgresSalesHistoryRepository,
 )
+from app.infrastructure.repositories.scanner_repository import (
+    SqlAlchemyScannerRepository,
+)
 from app.infrastructure.repositories.timeline_repository import (
     SqlAlchemyLotTimelineSource,
 )
 from app.infrastructure.repositories.user_repository import SqlAlchemyAuthUserRepository
+from app.infrastructure.scanner_runner import SubprocessSourceRunner
 from app.llm import build_client
 
 
@@ -279,3 +301,65 @@ def build_list_receiver_offers_use_case(db: Session) -> ListReceiverOffers:
 
 def build_list_lot_donation_offers_use_case(db: Session) -> ListLotDonationOffers:
     return ListLotDonationOffers(SqlAlchemyDonationRepository(db))
+
+
+def _scanner(db: Session) -> SqlAlchemyScannerRepository:
+    return SqlAlchemyScannerRepository(db)
+
+
+def build_list_sources_use_case(db: Session) -> ListScannerSources:
+    return ListScannerSources(_scanner(db))
+
+
+def build_register_source_use_case(db: Session) -> RegisterSource:
+    allowed = [item.strip() for item in app_settings.scraper_allowed_domains.split(",") if item.strip()]
+    enforce = not (app_settings.scraper_disable_url_policy and app_settings.app_environment != "production")
+    return RegisterSource(_scanner(db), SqlAlchemyUnitOfWork(db), allowed, resolve_host, enforce)
+
+
+def build_record_terms_review_use_case(db: Session) -> RecordTermsReview:
+    return RecordTermsReview(_scanner(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_set_source_enabled_use_case(db: Session) -> SetSourceEnabled:
+    return SetSourceEnabled(_scanner(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_set_source_schedule_use_case(db: Session) -> SetSourceSchedule:
+    return SetSourceSchedule(_scanner(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_run_source_now_use_case(db: Session) -> RunSourceNow:
+    return RunSourceNow(_scanner(db), SqlAlchemyUnitOfWork(db), SubprocessSourceRunner())
+
+
+def build_run_due_sources_use_case(db: Session) -> RunDueSources:
+    return RunDueSources(_scanner(db), SqlAlchemyUnitOfWork(db), SubprocessSourceRunner())
+
+
+def build_get_scanner_summary_use_case(db: Session) -> GetScannerSummary:
+    return GetScannerSummary(_scanner(db))
+
+
+def build_list_executions_use_case(db: Session) -> ListExecutions:
+    return ListExecutions(_scanner(db))
+
+
+def build_list_execution_records_use_case(db: Session) -> ListExecutionRecords:
+    return ListExecutionRecords(_scanner(db))
+
+
+def build_list_products_use_case(db: Session) -> ListCollectedProducts:
+    return ListCollectedProducts(_scanner(db))
+
+
+def build_get_price_history_use_case(db: Session) -> GetPriceHistory:
+    return GetPriceHistory(_scanner(db))
+
+
+def build_list_businesses_use_case(db: Session) -> ListDiscoveredBusinesses:
+    return ListDiscoveredBusinesses(_scanner(db))
+
+
+def build_verify_business_use_case(db: Session) -> VerifyBusiness:
+    return VerifyBusiness(_scanner(db), SqlAlchemyUnitOfWork(db))
