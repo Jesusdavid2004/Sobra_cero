@@ -216,3 +216,15 @@ class GeocoderUnavailableError(Exception):
 
 class RateLimitedError(Exception):
     """The caller made too many requests in a short time."""
+
+
+class WasteInvalidError(Exception):
+    """The waste record is not valid; the message is a stable reason code."""
+
+
+class WasteLotNotFoundError(Exception):
+    """The lot is missing, not owned by the caller or has no units left to record."""
+
+
+class WastePermissionError(Exception):
+    """Only a business account can record waste."""
