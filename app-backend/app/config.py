@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     ai_daily_quota: int = Field(default=25, gt=0)
     ai_cache_ttl_seconds: int = Field(default=900, gt=0)
 
+    scraper_allowed_domains: str = "overpass-api.de,exito.com,alkosto.com,jumbocolombia.com"
+    scraper_disable_url_policy: bool = False
+
     realtime_broker: Literal["memory", "redis"] = "memory"
     realtime_max_subscriptions: int = Field(default=20, gt=0)
     realtime_max_message_bytes: int = Field(default=2048, gt=0)
