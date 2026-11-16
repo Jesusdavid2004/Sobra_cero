@@ -118,6 +118,31 @@ def test_affiliated_shops_and_discovered_businesses_are_kept_visibly_apart(clien
     assert {p["affiliation"] for p in found if p["place_id"].startswith("ext:")} == {"discovered"}
 
 
+def test_an_affiliated_shop_is_shown_under_the_category_of_what_it_sells(client):
+    seed_world(client)
+    owner = auth_headers(client, "kiosk@example.com")
+
+    def add_shop(name: str, product_category: str) -> None:
+        created = client.post(
+            "/api/v1/shops",
+            json={"name": name, "description": "", "latitude": 1.2150, "longitude": -77.2790},
+            headers=owner,
+        ).json()
+        client.post(
+            f"/api/v1/shops/{created['id']}/products",
+            json={"name": "Item", "description": "", "category": product_category},
+            headers=owner,
+        )
+
+    add_shop("Pan y Mas", "bakery")
+    add_shop("Plaza Grill", "prepared")
+    categories = {p["name"]: p["category"] for p in places(client, layer="affiliated")}
+
+    assert categories["Pan y Mas"] == "bakery"
+    assert categories["Plaza Grill"] == "restaurant"
+    assert categories["Green Bakery"] == "restaurant"
+
+
 def test_a_shop_without_a_location_and_a_rejected_business_are_not_shown(client):
     seed_world(client)
 
