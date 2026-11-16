@@ -1,3 +1,5 @@
+import httpx
+
 """Application composition root for request-scoped dependencies."""
 
 from functools import lru_cache
@@ -30,6 +32,12 @@ from app.application.use_cases.explain_rescue_plan import ExplainRescuePlan
 from app.application.use_cases.get_public_shop import GetPublicShop
 from app.application.use_cases.import_sales_history import ImportSalesHistoryCsv
 from app.application.use_cases.lot_timeline import GetLotTimeline
+from app.application.use_cases.map_places import (
+    GetMapOpportunities,
+    ListMapPlaces,
+    ListPublicPromotions,
+    SearchGeocode,
+)
 from app.application.use_cases.parse_discovery_intent import ParseDiscoveryIntent
 from app.application.use_cases.rescue_plan import (
     DecideRescuePlan,
@@ -69,6 +77,7 @@ from app.infrastructure.auth.refresh_sessions import (
     JwtRedisSessionManager,
     RedisRefreshTokenStore,
 )
+from app.infrastructure.geocoding import FakeGeocoder, NominatimGeocoder
 from app.infrastructure.network import resolve_host
 from app.infrastructure.prediction.weekday_sales_forecast import (
     WeekdaySalesForecastModel,
@@ -89,6 +98,7 @@ from app.infrastructure.repositories.donation_repository import (
     SqlAlchemyDonationRepository,
 )
 from app.infrastructure.repositories.impact_repository import SqlAlchemyImpactRepository
+from app.infrastructure.repositories.map_repository import SqlAlchemyMapRepository
 from app.infrastructure.repositories.public_shop_repository import (
     SqlAlchemyPublicShopRepository,
 )
@@ -363,3 +373,28 @@ def build_list_businesses_use_case(db: Session) -> ListDiscoveredBusinesses:
 
 def build_verify_business_use_case(db: Session) -> VerifyBusiness:
     return VerifyBusiness(_scanner(db), SqlAlchemyUnitOfWork(db))
+
+
+def build_list_map_places_use_case(db: Session) -> ListMapPlaces:
+    return ListMapPlaces(SqlAlchemyMapRepository(db))
+
+
+def build_get_map_opportunities_use_case(db: Session) -> GetMapOpportunities:
+    return GetMapOpportunities(SqlAlchemyMapRepository(db))
+
+
+def build_list_public_promotions_use_case(db: Session) -> ListPublicPromotions:
+    return ListPublicPromotions(SqlAlchemyMapRepository(db))
+
+
+_nominatim: NominatimGeocoder | None = None
+
+
+def build_search_geocode_use_case() -> SearchGeocode:
+    """One geocoder per process, so its rate limit and cache are shared by every request."""
+    global _nominatim
+    if app_settings.geocoder_provider == "fake":
+        return SearchGeocode(FakeGeocoder())
+    if _nominatim is None:
+        _nominatim = NominatimGeocoder(httpx.Client(), app_settings.geocoder_user_agent, app_settings.geocoder_base_url)
+    return SearchGeocode(_nominatim)
