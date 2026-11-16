@@ -172,3 +172,7 @@ class DonationStockUnavailableError(Exception):
 
 class DonationPermissionError(Exception):
     """The action needs a business account."""
+
+
+class PlaceInvalidError(Exception):
+    """A place or geographic value is outside what the directory can store."""
