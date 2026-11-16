@@ -204,3 +204,15 @@ class SourceInvalidError(Exception):
 
 class ScannerBusinessNotFoundError(Exception):
     """No external business matches the id."""
+
+
+class GeocodingQueryInvalidError(Exception):
+    """The place search text is not usable."""
+
+
+class GeocoderUnavailableError(Exception):
+    """The geocoding provider failed or did not answer."""
+
+
+class RateLimitedError(Exception):
+    """The caller made too many requests in a short time."""
