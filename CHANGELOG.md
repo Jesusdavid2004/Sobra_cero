@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+- Added an interactive map of food businesses in Pasto (Leaflet, clustering, layers, filters, place
+  search, opportunity areas and public promotions). Businesses found in public sources are never
+  shown as affiliated, every place states its source and when it was last seen, and demonstration
+  data is flagged and opt-in.
+- Added the Scanner: a Scrapy collection engine behind a policy gate (recorded terms review, domain
+  allowlist, SSRF protection, stop on 401, 403 and 429, `robots.txt`), an OpenStreetMap connector, a
+  schema.org JSON-LD catalog connector, price history, run history with rejected records, an
+  administrator API and screen, and scheduled runs.
+- Added declared waste and a daily shop diagnosis: numbers, alerts and limitations come from code;
+  the model only words them, and the diagnosis still works when the model is unavailable.
+- Migrations 0011 (external data) and 0012 (waste records).
+- Fixed the lot expiry time being shown in the server's time zone and a hydration error on every
+  page for visitors in dark mode.
 - Added pickup discovery: customers give a pickup window, budget, quantity and category and see
   only the lots they can collect in time, with the reason each other lot was left out. A language
   model can fill the form from a typed sentence; the customer reviews it. Includes a seeded
