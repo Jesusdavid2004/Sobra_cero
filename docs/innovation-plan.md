@@ -20,6 +20,9 @@ it is a bounded, explainable and verifiable rescue flow, with tests as evidence.
 | 8 | Worker and scheduler on Railway | Not started (the custom domain was dropped from scope). |
 | 9 | Pickup discovery by window and budget, with an AI reader for a typed request | Done: `docs/evaluation-discovery.md`, `docs/ai-usage.md`. |
 | 10 | Donation receivers: compatibility rules, fair order, AI-drafted message, accept and delivery proof | Done: demo receivers only; no verification of organizations. |
+| 11 | Interactive map and place directory for Pasto | Done: `docs/MAPS_GUIDE.md`; live Overpass query unverified from the development machine. |
+| 12 | Scanner: polite Scrapy engine with a terms-review gate | Done: `docs/SCRAPING_GUIDE.md`; retail sources ship disabled. |
+| 13 | Declared waste and daily diagnosis with an AI summary | Done: `docs/AI_SYSTEM.md`; live Groq call unverified. |
 
 ## 1. What exists today (verified)
 
