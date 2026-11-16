@@ -88,7 +88,7 @@ def register(base_url: str, key: str = "fixture", **overrides) -> None:
 def run(tmp_path: Path, key: str = "fixture") -> dict:
     environment = {
         **os.environ,
-        "DATABASE_URL": "sqlite:///./test_sobracero.db",
+        "DATABASE_URL": f"sqlite:///{Path(str(engine.url.database)).resolve().as_posix()}",
         "APP_ENVIRONMENT": "test",
         "SCRAPER_DISABLE_URL_POLICY": "1",
         "SCRAPER_DOWNLOAD_DELAY": "0",
