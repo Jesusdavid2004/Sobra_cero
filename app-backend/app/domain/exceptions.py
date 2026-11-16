@@ -176,3 +176,7 @@ class DonationPermissionError(Exception):
 
 class PlaceInvalidError(Exception):
     """A place or geographic value is outside what the directory can store."""
+
+
+class ExternalDataInvalidError(Exception):
+    """A collected record was rejected; the message is a stable reason code."""
