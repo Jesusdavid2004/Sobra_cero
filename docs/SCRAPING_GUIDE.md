@@ -54,9 +54,9 @@ automated reading. A connector for such a source is not a missing feature; it is
 - **Manually** from `/admin/scanner` (Run now) or `POST /api/v1/admin/scanner/sources/{key}/run`.
 - **From a terminal** (inside `app-backend/`): `python -m scraper.run --source KEY`. It prints one
   JSON line with the counters.
-- **On a schedule**: set a source's schedule (at least every 15 minutes). `RunDueSources` runs every
-  enabled, reviewed source that is due. A scheduler task that calls it is the one piece still to
-  wire in the Celery beat configuration; until then schedules are stored but not executed.
+- **On a schedule**: set a source's schedule (at least every 15 minutes). A Celery beat task
+  (`run-due-scanner-sources`, checked every 15 minutes) runs every enabled, reviewed source whose
+  interval has passed. It needs the `scheduler` and `worker` services running, as for lot expiry.
 - A run left in `running` by a dead process is closed as `failed` on the next run, so the history
   never lies.
 

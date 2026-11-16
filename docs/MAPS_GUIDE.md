@@ -65,8 +65,8 @@ contributors"; the map and each externally sourced place carry it.
 | `GET` | `/api/v1/map/promotions` | Fresh public promotions. Public. |
 | `GET` | `/api/v1/geo/search` | Place search. Rate limited. |
 
-`/map/places` returns `approximate`-free data (coordinates are stored values), `counts` per layer
-and the attribution to display. Rejected businesses and shops without a location are never returned.
+`/map/places` returns the stored coordinates (nothing is estimated), `counts` per layer and the
+attribution to display. Rejected businesses and shops without a location are never returned.
 
 ## Demonstration data
 
