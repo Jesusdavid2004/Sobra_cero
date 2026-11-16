@@ -303,5 +303,23 @@ class DonationOfferRecord(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class WasteRecordRow(Base):
+    """Units a shop declared as wasted. Only what the shop records; never an estimate."""
+
+    __tablename__ = "waste_records"
+    __table_args__ = (
+        CheckConstraint("reason IN ('expired', 'damaged', 'unsold', 'other')", name="ck_waste_records_reason"),
+        CheckConstraint("quantity > 0", name="ck_waste_records_quantity"),
+        Index("ix_waste_records_lot_time", "lot_id", "created_at"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    lot_id: Mapped[int] = mapped_column(ForeignKey("lots.id", ondelete="CASCADE"))
+    quantity: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(String(200), default="")
+    recorded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
+
+
 # Registers the tables for externally collected data with the same metadata.
 import_module("app.models_external")
