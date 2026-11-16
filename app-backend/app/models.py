@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+from importlib import import_module
 
 from sqlalchemy import (
     Boolean,
@@ -300,3 +301,7 @@ class DonationOfferRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# Registers the tables for externally collected data with the same metadata.
+import_module("app.models_external")
