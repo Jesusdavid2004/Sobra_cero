@@ -10,6 +10,7 @@ import httpx
 from pydantic import BaseModel
 
 from app.application.ai_dto import (
+    DiagnosisNarrative,
     DiscoveryIntent,
     DonationOfferDraft,
     ExpiryDateRead,
@@ -215,6 +216,17 @@ class FakeAIProviderAdapter:
                     "Las ventas esperadas no alcanzan para agotar el stock antes del cierre. Revisa la accion sugerida."
                     if spanish
                     else "Expected sales will not clear the stock before pickup closes. Review the suggested action."
+                )
+            }
+        elif response_model is DiagnosisNarrative:
+            spanish = "spanish" in prompt.lower()
+            result = {
+                "text": (
+                    "Revisa las alertas de hoy y ten en cuenta las limitaciones indicadas: este resumen solo usa "
+                    "los registros de la plataforma."
+                    if spanish
+                    else "Review today's alerts and keep the listed limitations in mind: this summary only uses "
+                    "the records the platform holds."
                 )
             }
         elif response_model is DonationOfferDraft:

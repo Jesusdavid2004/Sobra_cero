@@ -79,6 +79,18 @@ class DiscoveryIntent(BaseModel):
         return value
 
 
+class DiagnosisNarrative(BaseModel):
+    text: str = Field(min_length=1, max_length=700)
+
+    @field_validator("text")
+    @classmethod
+    def keep_narrative_free_of_numbers(cls, value: str) -> str:
+        value = value.strip()
+        if not value or len(value.split()) > 90 or any(character.isdigit() for character in value):
+            raise ValueError("The diagnosis narrative must be brief and must not state any numbers")
+        return value
+
+
 class DonationOfferDraft(BaseModel):
     text: str = Field(min_length=1, max_length=MAX_DONATION_MESSAGE_CHARS)
 
