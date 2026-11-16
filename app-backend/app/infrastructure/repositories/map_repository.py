@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 from app.application.map_dto import MapPlace, PromotionView
 from app.domain.external_data import DEFAULT_MAX_AGE_HOURS, freshness
 from app.domain.opportunities import Signal, SignalPoint
-from app.domain.places import Affiliation, BoundingBox, PlaceCategory, normalize_name
-from app.models import Lot, ReceiverRecord, Shop
+from app.domain.places import Affiliation, BoundingBox, normalize_name, shop_category
+from app.models import Lot, Product, ReceiverRecord, Shop
 from app.models_external import (
     ExternalBusinessRow,
     ExternalProductRow,
@@ -16,7 +16,6 @@ from app.models_external import (
 
 AFFILIATED_SOURCE = "sobracero"
 RECEIVER_SOURCE = "sobracero"
-SHOP_CATEGORIES = {"restaurant": PlaceCategory.RESTAURANT, "supermarket": PlaceCategory.SUPERMARKET}
 DEFAULT_PLACE_LIMIT = 500
 
 
@@ -36,9 +35,21 @@ class SqlAlchemyMapRepository:
         ).all()
         return {shop_id: count for shop_id, count in rows}
 
+    def _dominant_product_categories(self) -> dict[int, str]:
+        rows = self._session.execute(
+            select(Product.shop_id, Product.category, func.count())
+            .group_by(Product.shop_id, Product.category)
+            .order_by(Product.shop_id, func.count().desc(), Product.category)
+        ).all()
+        dominant: dict[int, str] = {}
+        for shop_id, category, _count in rows:
+            dominant.setdefault(shop_id, category)
+        return dominant
+
     def affiliated(self, bounds: BoundingBox, categories: frozenset[str], text: str, only_offers: bool,
                    limit: int, now: datetime) -> list[MapPlace]:  # fmt: skip
         offers = self._offer_counts(now)
+        dominant = self._dominant_product_categories()
         query = select(Shop).where(
             Shop.latitude.between(bounds.south, bounds.north),
             Shop.longitude.between(bounds.west, bounds.east),
@@ -46,7 +57,7 @@ class SqlAlchemyMapRepository:
         )
         places = []
         for shop in self._session.scalars(query.order_by(Shop.name)):
-            category = SHOP_CATEGORIES.get(shop.business_type, PlaceCategory.OTHER)
+            category = shop_category(shop.business_type, dominant.get(shop.id))
             if categories and category.value not in categories:
                 continue
             if text and text not in normalize_name(shop.name):
