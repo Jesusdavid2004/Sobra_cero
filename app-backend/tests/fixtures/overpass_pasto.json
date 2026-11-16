@@ -1,0 +1,17 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API (recorded sample for tests)",
+  "osm3s": {"copyright": "The data included in this document is from www.openstreetmap.org. The data is made available under ODbL."},
+  "elements": [
+    {"type": "node", "id": 1001, "lat": 1.2136, "lon": -77.2811,
+     "tags": {"name": "Panadería El Trigo", "shop": "bakery", "addr:street": "Calle 18", "addr:housenumber": "25-10", "addr:city": "Pasto", "opening_hours": "Mo-Sa 07:00-19:00", "phone": "+57 300 0000000"}},
+    {"type": "way", "id": 2002, "center": {"lat": 1.2150, "lon": -77.2790},
+     "tags": {"name": "Restaurante La Plaza", "amenity": "restaurant", "website": "https://laplaza.example"}},
+    {"type": "node", "id": 3003, "lat": 1.2170, "lon": -77.2770,
+     "tags": {"shop": "supermarket"}},
+    {"type": "node", "id": 4004, "lat": 4.7110, "lon": -74.0721,
+     "tags": {"name": "Supermercado Lejano", "shop": "supermarket"}},
+    {"type": "node", "id": 5005, "lat": 1.2142, "lon": -77.2805,
+     "tags": {"name": "Cafe Central", "amenity": "cafe"}}
+  ]
+}
