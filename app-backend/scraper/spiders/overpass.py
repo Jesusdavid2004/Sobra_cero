@@ -5,11 +5,13 @@ from typing import Any
 import scrapy
 from scrapy.http import FormRequest, Request, Response
 
+from app.domain.collection import StopReason
 from app.domain.places import PASTO_BOUNDS, BoundingBox, category_from_osm
 from scraper.context import CollectionContext
 from scraper.items import BusinessItem
 
 OVERPASS_TIMEOUT_SECONDS = 60
+OVERPASS_DOWNLOAD_TIMEOUT_SECONDS = OVERPASS_TIMEOUT_SECONDS + 30
 OSM_ELEMENT_URL = "https://www.openstreetmap.org/{kind}/{identifier}"
 SHOP_TAGS = "supermarket|bakery|convenience|greengrocer|butcher|deli"
 AMENITY_TAGS = "restaurant|cafe|fast_food|marketplace"
@@ -68,10 +70,12 @@ class OverpassSpider(scrapy.Spider):
             formdata={"data": build_overpass_query(bounds)},
             callback=self.parse_elements,
             errback=self.on_failure,
+            meta={"download_timeout": OVERPASS_DOWNLOAD_TIMEOUT_SECONDS},
         )
 
     def parse_elements(self, response: Response) -> Iterator[BusinessItem]:
         yield from business_items(json.loads(response.text))
 
     def on_failure(self, failure: Any) -> None:
+        self.context.stop_reason = StopReason.TIMEOUT.value
         self.logger.error("Overpass request failed: %s", failure.getErrorMessage())
