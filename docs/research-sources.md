@@ -9,15 +9,21 @@ never means the site's terms of use were reviewed.
 | --- | --- | --- | --- | --- |
 | OpenStreetMap through the Overpass API | Open map data (ODbL): shops, restaurants, cafes, markets, with coordinates and often address and hours | Not applicable (API with a fair-use policy) | ODbL requires attribution "OpenStreetMap contributors" and share-alike on derived databases | **Implemented.** One bounded query per run, identifying User-Agent, results cached in our own tables, attribution shown on the map and in each record. The public instance asks for modest use (no mass queries). |
 | Nominatim (OpenStreetMap geocoder) | Address and place search | Not applicable | Usage policy: at most 1 request per second, valid identifying User-Agent, no autocomplete, no bulk geocoding, cache results, show attribution | **Implemented** behind a provider interface with a 1 req/s limiter and an in-memory cache; swappable. |
-| Exito Colombia | Public catalog pages | Allows `/`; disallows account, login, checkout, quick-view and spy paths | Not reviewed | **Connector class provided, disabled by default.** |
-| Alkosto Colombia | Public catalog pages, sitemaps | Allows `/`; disallows search (`?q=`), cart, checkout and account; publishes product sitemaps | Not reviewed | **Connector class provided, disabled by default.** |
-| Jumbo Colombia | Public catalog pages | Allows `/`; disallows search, checkout, account, cart and many query parameters | Not reviewed | **Connector class provided, disabled by default.** |
+| Exito Colombia | Public catalog pages | Allows `/`; disallows account, login, checkout, quick-view and spy paths | Not reviewed | **Not collectable.** On 2026-11-16 a request from an identified collector received `403`. That is a refusal; the collector stops and does not disguise itself. |
+| Alkosto Colombia | Public catalog pages, sitemaps | Allows `/`; disallows search (`?q=`), cart, checkout and account; publishes product sitemaps | No terms page found at the common addresses | **Nothing to read.** Its pages publish no schema.org data (checked 2026-11-16). The promotional flyers linked for this project are images hosted by a third party (FlipHTML5); reading them would need OCR and is out of scope. |
+| Jumbo Colombia | Public catalog pages | Allows `/`; disallows search, checkout, account, cart and many query parameters | Read on 2026-11-16: the general terms are about purchases and contain no clause about automated reading (silence is not permission) | **Nothing to read.** Product and special pages are rendered with JavaScript and publish no schema.org data. Getting prices would need a headless browser or the shop's internal API, which this project does not use. |
 | Google Maps | Places | Not used | Prohibits scraping | **Not used**, as required. |
 
-The retail connectors read only the schema.org `Product` and `Offer` markup that a page publishes
-for machines (JSON-LD). They are enabled per source by an administrator who records that the
-terms were reviewed; until then the Scanner refuses to run them. They stop on the first 401, 403
-or 429 and never try to get around a block.
+The catalog connector reads only the schema.org `Product` and `Offer` markup that a page publishes
+for machines (JSON-LD). It is enabled per source by an administrator who records that the terms
+were reviewed; until then the Scanner refuses to run it. It stops on the first 401, 403 or 429 and
+never tries to get around a block.
+
+**Result of the investigation (2026-11-16):** none of the three retailers can be read within these
+rules. The user's permission is not the shop's permission, and the project does not use a browser
+that runs JavaScript, undocumented endpoints or a disguised User-Agent. To demonstrate the whole
+flow with real code, the project publishes an **invented catalog on its own site**
+(`/demo-catalog`, every product named "Demo:"), and uses OpenStreetMap for real businesses.
 
 ## Technology
 
