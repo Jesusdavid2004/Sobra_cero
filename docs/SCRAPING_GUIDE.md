@@ -3,6 +3,13 @@
 How data is collected from outside the platform, what is allowed, and how to add a source.
 Decisions are in ADR 0010; sources and their policies are in `research-sources.md`.
 
+## A source you can always demonstrate
+
+The frontend publishes `/demo-catalog`, a page of invented products (every name starts with
+"Demo:") with schema.org data. Register it as a `jsonld_catalog` source, record the review (it is
+your own page), enable it and run it to see the whole flow without reading anybody else's site.
+It is not indexed by search engines.
+
 ## Principles
 
 1. **A permissive `robots.txt` is not permission.** Every source needs a person to record that its
@@ -47,7 +54,8 @@ POST /api/v1/admin/scanner/sources/{key}/run
 | `jsonld_catalog` | `JsonLdCatalogSpider` | schema.org `Product` and `Offer` JSON-LD on the start page | A reference price counts only when the page marks it as a list price. Only COP prices are read. |
 
 Not implemented: JavaScript-rendered pages, search, login, and any marketplace that forbids
-automated reading. A connector for such a source is not a missing feature; it is a decision.
+automated reading. In practice this rules out Exito (answers `403` to an identified collector),
+Alkosto and Jumbo (no machine-readable data in their pages); see `research-sources.md`. A connector for such a source is not a missing feature; it is a decision.
 
 ## Running and scheduling
 
