@@ -103,6 +103,37 @@ If a run is `stopped` with `access_denied` or `robots_forbidden`, the source ref
 around it. If the OpenStreetMap run fails, the public Overpass server may be busy; try again later.
 Scheduled runs need the `worker` and `scheduler` services; manual runs do not.
 
+## Loading demonstration data for a presentation
+
+`scripts/seed_expo_demo.py` fills the database with invented data so every screen has content:
+five accounts, three shops in Pasto with products and lots, 60 days of sales per product, two
+reservations (one picked up), a receiver with an open offer, a delivered donation and a waste
+record. Shop names start with "Demo". Nothing here is a real business.
+
+Run it from your own machine against the Railway database. You never paste the connection string
+into a chat or a file:
+
+1. In Railway, open the **Postgres** service, tab *Variables*, and copy `DATABASE_PUBLIC_URL`.
+2. In PowerShell, from the repository root, change `postgresql://` at the start to
+   `postgresql+psycopg2://` and set both variables for this terminal only:
+   ```powershell
+   $env:DATABASE_URL = "postgresql+psycopg2://..."
+   $env:DEMO_PASSWORD = "a password you choose, 10 characters or more"
+   ..venvScriptspython.exe scriptsseed_expo_demo.py
+   ..venvScriptspython.exe scriptsseed_pasto_demo.py
+   ```
+3. Sign in with `panaderia@sobracero.com`, `restaurante@sobracero.com`,
+   `supermercado@sobracero.com`, `cliente@sobracero.com` or `banco@sobracero.com` and the
+   password you chose.
+
+The script is safe to run again. Run it on the morning of the presentation: lots get a fresh expiry
+time and stock, so the storefront is never empty. It never creates or changes an administrator.
+
+`overpass-api.de` publishes `Disallow: /api/` in its `robots.txt`, so the Scanner stops there by
+design. Use an instance without that restriction, such as `https://overpass.kumi.systems/api/interpreter`,
+and add its domain to `SCRAPER_ALLOWED_DOMAINS`. Public Overpass servers can be slow; a run that
+exceeds the wait is recorded as a timeout.
+
 ## Backups and recovery
 
 For a local logical database backup:
