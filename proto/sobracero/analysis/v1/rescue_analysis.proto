@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package sobracero.analysis.v1;
+
+// Rescue analysis is stateless and read-only: it receives a snapshot built and
+// authorized by the API, and never receives shop identifiers or reads storage.
+service RescueAnalysis {
+  rpc AnalyzeLot(AnalyzeLotRequest) returns (LotAnalysis);
+  // Results are ordered by priority: highest surplus ratio first, then the
+  // shortest horizon.
+  rpc AnalyzeShop(AnalyzeShopRequest) returns (AnalyzeShopResponse);
+}
+
+message DailySales {
+  string sales_date = 1; // ISO-8601 date
+  uint32 units_sold = 2;
+  bool had_promotion = 3;
+}
+
+message WeekdayModel {
+  string version = 1;
+  repeated double weekday_factors = 2; // exactly seven, Monday first
+}
+
+message LotSnapshot {
+  string lot_ref = 1; // opaque correlation id chosen by the caller
+  uint32 available_quantity = 2;
+  uint32 current_discount_percent = 3;
+  double horizon_hours = 4;
+  string as_of_date = 5; // ISO-8601 date used to align weekdays
+  repeated DailySales history = 6;
+  optional WeekdayModel model = 7; // absent: baseline moving average
+}
+
+message AnalyzeLotRequest {
+  string request_id = 1;
+  LotSnapshot lot = 2;
+}
+
+message AnalyzeShopRequest {
+  string request_id = 1;
+  repeated LotSnapshot lots = 2; // at most 50
+}
+
+message LotAnalysis {
+  string lot_ref = 1;
+  double expected_sales = 2;
+  double surplus_units = 3;
+  string action = 4; // keep_offer | apply_discount_rule | prepare_donation_offer
+  optional uint32 proposed_discount_percent = 5;
+  repeated string reasons = 6; // stable codes translated by the client
+  string model_version = 7;
+  string rule_version = 8;
+  uint32 horizon_days_used = 9;
+}
+
+message AnalyzeShopResponse {
+  repeated LotAnalysis results = 1;
+}

@@ -1,0 +1,296 @@
+from datetime import date, datetime
+from typing import Mapping, Protocol, Sequence, TypeVar
+
+from pydantic import BaseModel
+
+from app.application.dto import (
+    AuthUser,
+    DailySales,
+    LotAnalysis,
+    LotAnalysisInput,
+    LotSnapshot,
+    PredictionEstimate,
+    SalesForecastEvaluation,
+    SalesForecastModelArtifact,
+    SessionTokens,
+    UserRole,
+)
+from app.application.map_dto import MapPlace, PromotionView
+from app.application.scanner_dto import (
+    BusinessView,
+    ExecutionView,
+    PricePoint,
+    ProductView,
+    RecordView,
+    RunResult,
+    ScannerSummary,
+    SourceView,
+)
+from app.domain.diagnosis import ShopSnapshot
+from app.domain.discovery import LotCandidate
+from app.domain.events import LotStockChanged
+from app.domain.geocoding import GeocodeResult
+from app.domain.impact import ReservationOutcome
+from app.domain.opportunities import SignalPoint
+from app.domain.places import BoundingBox
+from app.domain.public_shop import PublicShop
+from app.domain.receivers import (
+    DonationLot,
+    DonationOffer,
+    OfferStatus,
+    OfferView,
+    Receiver,
+)
+from app.domain.rescue import RescuePlan, RescuePlanStatus
+from app.domain.timeline import DonationRow, PlanEventRow, ReservationRow
+from app.domain.waste import WasteEntry, WasteLot
+
+
+class SalesHistoryRepository(Protocol):
+    def list_for_product(self, product_id: int, since: date) -> list[DailySales]: ...
+
+    def upsert_many(self, product_id: int, entries: Sequence[DailySales]) -> tuple[int, int]: ...
+
+    def save_prediction(
+        self,
+        *,
+        product_id: int,
+        lot_id: int,
+        risk_score: int,
+        units_at_risk: float,
+        expected_sales: float,
+        recommendation: str,
+        model_version: str,
+    ) -> None: ...
+
+
+class PredictionModel(Protocol):
+    def predict(
+        self,
+        history: Sequence[DailySales],
+        current_stock: int,
+        days_remaining: int,
+        today: date,
+    ) -> PredictionEstimate: ...
+
+
+class SalesForecastTrainer(Protocol):
+    def train(self, histories: Sequence[Sequence[DailySales]]) -> SalesForecastEvaluation: ...
+
+
+class SalesForecastModelRepository(Protocol):
+    def list_training_history(self) -> list[list[DailySales]]: ...
+
+    def get_active_model(self) -> SalesForecastModelArtifact | None: ...
+
+    def save_evaluation(self, evaluation: SalesForecastEvaluation, *, activate: bool) -> None: ...
+
+
+AIOutput = TypeVar("AIOutput", bound=BaseModel)
+
+
+class AIProvider(Protocol):
+    def generate_structured(
+        self,
+        *,
+        prompt: str,
+        response_model: type[AIOutput],
+        user_id: int,
+        locale: str,
+        prompt_version: str,
+        image_data: bytes | None = None,
+        image_mime_type: str | None = None,
+        model_tier: str = "fast",
+    ) -> AIOutput: ...
+
+
+class PublicShopRepository(Protocol):
+    def get(self, shop_id: int) -> PublicShop | None: ...
+
+
+class LotTimelineSource(Protocol):
+    def plan_events(self, lot_id: int) -> list[PlanEventRow]: ...
+
+    def reservations(self, lot_id: int) -> list[ReservationRow]: ...
+
+    def donations(self, lot_id: int) -> list[DonationRow]: ...
+
+
+class ImpactRepository(Protocol):
+    def reservation_outcomes(self, shop_id: int) -> list[ReservationOutcome]: ...
+
+    def donated_units(self, shop_id: int) -> int: ...
+
+
+class DiscoveryLotSource(Protocol):
+    def open_candidates(self, now: datetime) -> list[LotCandidate]: ...
+
+
+class DonationRepository(Protocol):
+    def get_lot(self, lot_id: int) -> DonationLot | None: ...
+
+    def list_receivers(self) -> list[Receiver]: ...
+
+    def get_receiver(self, receiver_id: int) -> Receiver | None: ...
+
+    def get_receiver_by_owner(self, user_id: int) -> Receiver | None: ...
+
+    def add_receiver(self, receiver: Receiver) -> Receiver: ...
+
+    def recent_committed_counts(self, since: datetime) -> dict[int, int]: ...
+
+    def add_offer(self, lot_id: int, receiver_id: int, quantity: int, message: str, now: datetime) -> DonationOffer: ...
+
+    def get_offer(self, offer_id: int) -> DonationOffer | None: ...
+
+    def view_offers_for_lot(self, lot_id: int) -> list[OfferView]: ...
+
+    def view_offers_for_receiver(self, receiver_id: int) -> list[OfferView]: ...
+
+    def claim_offer(self, offer_id: int, current: OfferStatus, target: OfferStatus, now: datetime) -> bool: ...
+
+    def commit_stock(self, lot_id: int, quantity: int, now: datetime) -> bool: ...
+
+    def record_delivery(self, lot_id: int, quantity: int) -> None: ...
+
+
+class LotEventPublisher(Protocol):
+    def publish(self, event: LotStockChanged) -> None: ...
+
+
+class AuthUserRepository(Protocol):
+    def find_by_email(self, email: str) -> AuthUser | None: ...
+
+    def create_user(self, email: str, password_hash: str, role: UserRole) -> AuthUser: ...
+
+
+class PasswordHasher(Protocol):
+    def hash(self, password: str) -> str: ...
+
+    def verify(self, password: str, password_hash: str) -> bool: ...
+
+
+class SessionManager(Protocol):
+    def issue(self, user_id: int) -> SessionTokens: ...
+
+    def rotate(self, refresh_token: str) -> SessionTokens: ...
+
+    def revoke(self, refresh_token: str) -> None: ...
+
+
+class RefreshTokenStore(Protocol):
+    def issue(self, token_id: str, user_id: int, ttl_seconds: int) -> bool: ...
+
+    def rotate(self, old_token_id: str, new_token_id: str, user_id: int, ttl_seconds: int) -> bool: ...
+
+    def revoke(self, token_id: str, user_id: int) -> None: ...
+
+
+class UnitOfWork(Protocol):
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+
+class RescueAnalyzer(Protocol):
+    def analyze_lot(self, request_id: str, lot: LotAnalysisInput) -> LotAnalysis: ...
+
+    def analyze_shop(self, request_id: str, lots: Sequence[LotAnalysisInput]) -> list[LotAnalysis]: ...
+
+
+class RescueLotGateway(Protocol):
+    def get_snapshot(self, lot_id: int) -> LotSnapshot | None: ...
+
+    def get_shop_owner_id(self, shop_id: int) -> int | None: ...
+
+    def apply_discount_if_unchanged(self, lot_id: int, expected_quantity: int, discount_percent: int) -> bool: ...
+
+
+class RescuePlanRepository(Protocol):
+    def add(self, plan: RescuePlan) -> RescuePlan: ...
+
+    def get(self, plan_id: int) -> RescuePlan | None: ...
+
+    def list_for_shop(self, shop_id: int, status: RescuePlanStatus | None) -> list[RescuePlan]: ...
+
+    def supersede_pending_for_lot(self, lot_id: int) -> list[int]: ...
+
+    def mark_decided(self, plan_id: int, status: RescuePlanStatus, actor_id: int, now: datetime) -> bool: ...
+
+    def record_event(
+        self, plan_id: int, event_type: str, actor_id: int | None, payload: Mapping[str, object]
+    ) -> None: ...
+
+
+class ScannerRepository(Protocol):
+    def list_sources(self) -> list[SourceView]: ...
+
+    def get_source(self, key: str) -> SourceView | None: ...
+
+    def add_source(
+        self, key: str, name: str, kind: str, base_url: str, domain: str, license_note: str
+    ) -> SourceView: ...
+
+    def record_terms_review(self, key: str, user_id: int, note: str, license_note: str, now: datetime) -> bool: ...
+
+    def set_enabled(self, key: str, enabled: bool) -> bool: ...
+
+    def set_schedule(self, key: str, minutes: int | None) -> bool: ...
+
+    def due_sources(self, now: datetime) -> list[str]: ...
+
+    def fail_stale_runs(self, now: datetime, max_age_seconds: int) -> int: ...
+
+    def list_executions(self, source_key: str | None, limit: int) -> list[ExecutionView]: ...
+
+    def list_records(self, execution_id: int, limit: int) -> list[RecordView]: ...
+
+    def list_products(
+        self, source_key: str | None, promotions_only: bool, limit: int, now: datetime
+    ) -> list[ProductView]: ...
+
+    def price_history(self, product_id: int) -> list[PricePoint]: ...
+
+    def list_businesses(self, verification: str | None, limit: int, now: datetime) -> list[BusinessView]: ...
+
+    def set_business_verification(self, business_id: int, status: str) -> bool: ...
+
+    def summary(self, now: datetime) -> ScannerSummary: ...
+
+
+class SourceRunner(Protocol):
+    def run(self, source_key: str, trigger: str, user_id: int | None) -> RunResult: ...
+
+
+class GeocodingProvider(Protocol):
+    def search(self, query: str, limit: int = ...) -> list[GeocodeResult]: ...
+
+
+class MapRepository(Protocol):
+    def affiliated(
+        self, bounds: BoundingBox, categories: frozenset[str], text: str, only_offers: bool, limit: int, now: datetime
+    ) -> list[MapPlace]: ...
+
+    def discovered(
+        self, bounds: BoundingBox, categories: frozenset[str], text: str, include_demo: bool, limit: int, now: datetime
+    ) -> list[MapPlace]: ...
+
+    def receivers(self, bounds: BoundingBox, text: str, limit: int) -> list[MapPlace]: ...
+
+    def signal_points(self, bounds: BoundingBox, include_demo: bool, now: datetime) -> list[SignalPoint]: ...
+
+    def fresh_promotions(self, limit: int, now: datetime) -> list[PromotionView]: ...
+
+
+class InventoryRepository(Protocol):
+    def get_lot(self, lot_id: int) -> WasteLot | None: ...
+
+    def get_shop_owner(self, shop_id: int) -> int | None: ...
+
+    def remove_stock(self, lot_id: int, quantity: int) -> bool: ...
+
+    def add_waste(self, lot_id: int, quantity: int, reason: str, note: str, user_id: int, now: datetime) -> None: ...
+
+    def list_waste(self, shop_id: int, limit: int) -> list[WasteEntry]: ...
+
+    def snapshot(self, shop_id: int, now: datetime) -> ShopSnapshot: ...
