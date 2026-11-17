@@ -78,6 +78,31 @@ Keep `.env.example` free of real secrets.
   logs; a running API alone does not execute scheduled work.
 - `/health` is a liveness check. `/ready` checks PostgreSQL and Redis only.
 
+## Loading data in production (Scanner)
+
+The Scanner runs inside the backend service, so it uses the server's own connection to the internet.
+Nothing here needs a secret to be shared. Steps:
+
+1. **Allow the domains** (Railway, backend service, Variables): set
+   `SCRAPER_ALLOWED_DOMAINS` to `overpass-api.de,<your-frontend-domain>`, for example
+   `overpass-api.de,luminous-determination-production.up.railway.app`. Leave
+   `SCRAPER_DISABLE_URL_POLICY` unset (it must stay off in production).
+2. **Make an administrator**: register a normal account in the app, then in the Railway PostgreSQL
+   service open *Data* → *Query* and run
+   `UPDATE users SET is_admin = true WHERE email = 'your-email';`
+3. **Open `/en/admin/scanner`** signed in as that account and register two sources:
+   - OpenStreetMap: kind *OpenStreetMap (Overpass API)*, address
+     `https://overpass-api.de/api/interpreter`. Review the ODbL terms, record the review, enable, run.
+     It loads real businesses for Pasto; they appear on `/en/map` with the attribution.
+   - Demonstration catalog: kind *Store catalog*, address
+     `https://<your-frontend-domain>/en/demo-catalog`. Record the review (your own page), enable, run.
+     It loads six invented products and three promotions.
+4. **Check** the *Runs* tab (status, counters) and `/en/map`.
+
+If a run is `stopped` with `access_denied` or `robots_forbidden`, the source refused; do not retry
+around it. If the OpenStreetMap run fails, the public Overpass server may be busy; try again later.
+Scheduled runs need the `worker` and `scheduler` services; manual runs do not.
+
 ## Backups and recovery
 
 For a local logical database backup:
